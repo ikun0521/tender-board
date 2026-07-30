@@ -362,7 +362,7 @@ async function main() {
   const withDetail = hasFlag('detail');
   const noFilter = hasFlag('no-filter');
   const verbose = hasFlag('verbose');
-  const daysLimit = parseInt(getArg('days', '0'), 10) || 0;
+  const daysLimit = parseInt(getArg('days', '30'), 10) || 0;
   const outFile = path.resolve(ROOT, getArg('out', 'scripts/95306-candidates.json'));
 
   const keywords = await loadKeywords();
