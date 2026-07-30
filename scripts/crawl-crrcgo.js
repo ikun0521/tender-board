@@ -11,14 +11,14 @@
  * 用法：
  *   node scripts/crawl-crrcgo.js                      # 用 COS 关键词，抓「公告中」，输出候选 JSON
  *   node scripts/crawl-crrcgo.js --keywords 试验台,架车机 --out out.json
- *   node scripts/crawl-crrcgo.js --status 1 --page-size 20 --detail   # 抓详情提取截止日期
+ *   node scripts/crawl-crrcgo.js --status 1 --page-size 20 --detail   # 抓详情提取单位/发布时间
  *   node scripts/crawl-crrcgo.js --no-filter          # 不按截止日期过滤（含已截止）
  *
  * 参数：
  *   --keywords  逗号分隔的关键词（默认从 COS API 读取，失败回退 产品关键词.txt）
  *   --status    公告状态：1=公告中(默认) 2=公告截止 ""=全部
  *   --page-size 每个关键词取前 N 条（默认 20）
- *   --detail    抓取每条详情正文并用 deadline-parser 提取截止日期（较慢）
+ *   --detail    抓取每条详情正文获取招标单位/发布时间（较慢）
  *   --no-filter 不过滤已截止项目（默认仅保留 截止 >= 明天 与 待确认）
  *   --all-types 保留所有公告类型（默认只保留可投标的「采购/招标公告」，
  *               剔除中标候选人公示、成交结果公示、直接采购公示等结果类公示）
@@ -30,7 +30,6 @@ const crypto = require('crypto');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { parseDeadline } = require('./lib/deadline-parser');
 
 const ROOT = path.resolve(__dirname, '..');
 const HOST = 'www.crrcgo.cc';
@@ -177,25 +176,7 @@ function isBiddableNotice(title) {
   return BIDDABLE_NOTICE_RE.test(title);
 }
 
-/**
- * 合并截止日期：
- *   中车购列表接口的 overTime 是结构化的权威截止日（实测与正文 100% 一致，零失败），
- *   正文解析额外能拿到具体时刻（如 14:00）。
- *   策略：以 overTime 为准；若正文解析出的日期与 overTime 同一天且带时刻，则采用更精确的正文结果。
- */
-function mergeDeadline(overTime, parsedValue) {
-  const ot = (overTime || '').trim();
-  const pv = (parsedValue || '').trim();
-  if (!ot && !pv) return '待确认';
-  if (!ot) return pv;
-  if (!pv) return ot;
-  const otDay = ot.slice(0, 10);
-  const pvDay = pv.slice(0, 10);
-  // 正文同一天且含具体时刻 → 用正文（更精确）
-  if (otDay === pvDay && pv.length > 10) return pv;
-  // 日期不一致时以结构化 overTime 为准
-  return ot;
-}
+// 截止日期统一使用接口 overTime 字段（报名/公告截止日）
 
 function todayPlusDays(days) {
   const d = new Date();
@@ -263,9 +244,9 @@ async function main() {
     console.log(`[类型] 剔除结果类公示 ${before - candidates.length} 条，保留可投标公告 ${candidates.length} 条`);
   }
 
-  // 抓详情提取截止日期
+  // 抓详情获取招标单位/发布时间（截止日期直接用 overTime）
   if (withDetail && candidates.length) {
-    console.log(`[详情] 抓取 ${candidates.length} 条详情提取截止日期（并发 ${concurrency}）...`);
+    console.log(`[详情] 抓取 ${candidates.length} 条详情获取单位/时间（并发 ${concurrency}）...`);
     let idx = 0;
     async function worker() {
       while (idx < candidates.length) {
@@ -274,19 +255,17 @@ async function main() {
           const { text, entity, publish } = await getDetailText(c.id);
           if (entity && !c.unit) c.unit = entity;
           if (publish && !c.publish) c.publish = publish;
-          const parsed = parseDeadline(text, c.publish);
-          c.deadline = mergeDeadline(c.overTime, parsed && parsed.value);
-          c.deadlineSource = parsed && parsed.source ? parsed.source : 'overTime';
         } catch (e) {
-          c.deadline = c.overTime || '待确认';
-          c.deadlineSource = 'overTime';
+          // 详情抓取失败，保留列表已有的 overTime / unit
         }
+        c.deadline = c.overTime || '待确认';
+        c.deadlineSource = 'overTime';
         await new Promise((r) => setTimeout(r, 80));
       }
     }
     await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, worker));
   } else {
-    // 不抓详情时，用列表返回的 overTime 作为参考（公告截止日，非投标截止）
+    // 截止日期直接用 overTime（公告截止日，与国铁报名截止统一）
     for (const c of candidates) c.deadline = c.overTime || '待确认';
   }
 

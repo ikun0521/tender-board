@@ -19,13 +19,9 @@
  * 实测 30 次连续请求成功率 100%。
  * 注意：仍保留请求间隔（REQUEST_INTERVAL），避免对服务器造成压力。
  *
- * 【截止日期策略 —— 与中车购相反，务必注意】
- * 列表/详情返回的 latestDocumentSaleEndTime 只是「采购文件获取 / 报名截止」，
- * 真正的「投标文件递交截止」在正文里，且通常更晚。实测：
- *   上海机辆段三阀试验台      报名截止 08-02 08:00  →  投标截止 08-17 09:00
- *   杭州机辆段JZ-7制动机试验台 报名截止 07-29 12:00  →  报价截止 08-04 10:00
- * 因此策略为：**正文解析（deadline-parser）优先，latestDocumentSaleEndTime 仅作兜底**。
- * 若反过来只信 latestDocumentSaleEndTime，会把大量仍可投标的项目误判为已过期。
+ * 【截止日期策略 —— 已统一为"报名截止"，与中车购一致】
+ * 列表/详情返回的 latestDocumentSaleEndTime 即「采购文件获取/报名截止」，
+ * 统一以此为截止日期基准，不再从正文解析投标递交截止。
  *
  * 【公告类型字典 noticeType】
  *   01 项目公告(可投标)  02 变更公告  03 补遗公告  04 中标公示
@@ -56,7 +52,6 @@ const crypto = require('crypto');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { parseDeadline } = require('./lib/deadline-parser');
 
 const ROOT = path.resolve(__dirname, '..');
 const HOST = 'cg.95306.cn';
@@ -103,7 +98,7 @@ function strip(s) {
     .trim();
 }
 
-/** 正文清洗：保留换行，便于 deadline-parser 按行匹配 */
+/** 正文清洗：保留换行，便于内容提取 */
 function stripBody(s) {
   return String(s == null ? '' : s)
     .replace(/<\s*(br|\/p|\/div|\/tr|\/li|\/h[1-6])\s*\/?>/gi, '\n')
@@ -345,12 +340,9 @@ function parseDateLoose(s) {
 }
 
 /**
- * 合并截止日期。
- * 与中车购相反：国铁正文里的「投标/报价递交截止」才是真正的投标截止，
- * latestDocumentSaleEndTime 只是报名/文件获取截止，仅作兜底。
+ * 截止日期：以 latestDocumentSaleEndTime（报名截止）为准，与中车购统一。
  */
-function mergeDeadline(parsedValue, latestEnd) {
-  if (parsedValue) return { value: parsedValue, from: 'body' };
+function mergeDeadline(latestEnd) {
   if (latestEnd) {
     const t = String(latestEnd).trim().replace(/:00$/, '');
     return { value: t, from: 'latestDocumentSaleEndTime' };
@@ -460,7 +452,7 @@ async function main() {
     console.log(`[时间过滤] 仅保留近 ${daysLimit} 天，剔除 ${before - candidates.length} 条`);
   }
 
-  // 抓详情解析截止日期
+  // 截止日期统一用 latestDocumentSaleEndTime（报名截止）
   if (withDetail && candidates.length) {
     console.log(`\n[详情] 开始抓取 ${candidates.length} 条正文...`);
     let done = 0;
@@ -480,24 +472,13 @@ async function main() {
               c.noticeType = d.noticeType;
               c.noticeTypeName = NOTICE_TYPE_NAMES[d.noticeType] || c.noticeTypeName;
             }
-            const parsed = parseDeadline(d.body, c.publish);
-            const merged = mergeDeadline(
-              parsed && parsed.value ? parsed.value : '',
-              c.latestEnd
-            );
-            c.deadline = merged.value;
-            c.deadlineSource = merged.from;
-            c.deadlineLabel = parsed && parsed.source ? parsed.source : '';
-          } else {
-            const merged = mergeDeadline('', c.latestEnd);
-            c.deadline = merged.value;
-            c.deadlineSource = merged.from;
           }
         } catch (e) {
-          const merged = mergeDeadline('', c.latestEnd);
-          c.deadline = merged.value;
-          c.deadlineSource = merged.from;
+          // 保留列表已有的 latestEnd，详情抓取失败不抛异常
         }
+        const merged = mergeDeadline(c.latestEnd);
+        c.deadline = merged.value;
+        c.deadlineSource = merged.from;
         done++;
         if (done % 20 === 0) console.log(`       ...${done}/${candidates.length}`);
         await sleep(REQUEST_INTERVAL);
@@ -507,7 +488,7 @@ async function main() {
     console.log(`[详情] 完成 ${done} 条`);
   } else {
     for (const c of candidates) {
-      const merged = mergeDeadline('', c.latestEnd);
+      const merged = mergeDeadline(c.latestEnd);
       c.deadline = merged.value;
       c.deadlineSource = merged.from;
     }
