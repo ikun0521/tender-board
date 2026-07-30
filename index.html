@@ -49,10 +49,10 @@
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-900 tracking-tight">招标信息可视化看板</h1>
-                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">34</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
+                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">81</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <span class="text-sm text-slate-500">最近更新：2026-07-30 14:43</span>
+                    <span class="text-sm text-slate-500">最近更新：2026-07-30 17:06</span>
                     <button onclick="markAllAsRead()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         全部标记已阅
@@ -281,7 +281,7 @@
 
         <!-- Footer -->
         <div class="mt-8 text-center text-sm text-slate-400 fade-in" style="animation-delay: 0.5s">
-            <p>数据来源：招标信息汇总.md | 生成时间：2026-07-28</p>
+            <p>数据来源：招标信息汇总.md | 生成时间：2026-07-30</p>
         </div>
     </div>
 
@@ -571,17 +571,6 @@
         const API_BASE = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com';
 
         let tenders = [
-            {
-                "id": 1,
-                "name": "西安动车段综合制动试验台升级改造",
-                "unit": "中国铁路西安局集团有限公司",
-                "category": "试验台",
-                "publish": "2026-07-01",
-                "deadline": "2026-07-24 09:00",
-                "link": "https://www.zhiliaobiaoxun.cn/detail/597976027b1FB76CDAAc.html",
-                "platform": "国铁采购平台",
-                "priority": "高"
-            },
             {
                 "id": 7,
                 "name": "西安客车车辆段微控单车试验器购置",
@@ -944,6 +933,534 @@
                 "link": "https://www.zbytb.com/s-zb-68213820.html",
                 "platform": "国铁采购平台",
                 "priority": "高"
+            },
+            {
+                        "id": 63,
+                        "name": "中车贵阳-物资-弹簧半成品采购-铁路起重机-转向架-弹簧-一般性谈判-标准合同2026070012采购公告",
+                        "unit": "中车贵阳车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-03 11:00",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535013112365506560&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 64,
+                        "name": "常州公司智利车转向架弹簧2026070021采购公告",
+                        "unit": "中车常州车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-04 10:00",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534820686413851648&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 65,
+                        "name": "中车贵阳-物资-交叉杆扣板采购-转向架-交叉支撑装置-交叉杆组成-交叉杆扣板-一般性谈判-标准合同2026070011采购公告",
+                        "unit": "中车贵阳车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-03 11:00",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535017217230268416&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 66,
+                        "name": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070017采购公告",
+                        "unit": "中车唐山机车车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-05 09:00",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534816342842959872&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 67,
+                        "name": "轻量化转向架结构优化及强度仿真分析2026060147采购公告",
+                        "unit": "中车唐山机车车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-04",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534788652576327680&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 68,
+                        "name": "2026年下半年HXD2B机车转向架橡胶件-13082026070072采购公告",
+                        "unit": "中车大同电力机车有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-05",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534989639396156416&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 72,
+                        "name": "单车试验器新增设备采购2026070006采购公告",
+                        "unit": "中车长江车辆有限公司",
+                        "category": "单车试验器",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-06",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534995774605942784&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 77,
+                        "name": "车体撞击试验台防护罩及护栏安全防护能力提升2026070054采购公告",
+                        "unit": "中车青岛四方机车车辆股份有限公司",
+                        "category": "试验台",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-03",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534956247636035584&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 78,
+                        "name": "2026-WX0057 热工室空调性能试验台维修2026070042采购公告",
+                        "unit": "中铁检验认证（青岛）车辆检验站有限公司",
+                        "category": "试验台",
+                        "publish": "2026-07-30",
+                        "deadline": "2026-08-03",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534946583615692800&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 69,
+                        "name": "一批转向架配件委外加工2026070041采购公告",
+                        "unit": "中车山东机车车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-29",
+                        "deadline": "2026-07-31",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534387115957996544&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 70,
+                        "name": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070016采购公告",
+                        "unit": "中车唐山机车车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-29",
+                        "deadline": "2026-08-05",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534972260314409984&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 71,
+                        "name": "新一代拖车（客车）转向架样机研制方案侧梁变位器等工装改造项目2026070009采购公告",
+                        "unit": "中车青岛四方机车车辆股份有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-29",
+                        "deadline": "2026-08-02",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534310495738030080&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 73,
+                        "name": "戚墅堰公司司机控制器试验台2026070009采购公告",
+                        "unit": "中车戚墅堰机车有限公司",
+                        "category": "司机控制器试验台",
+                        "publish": "2026-07-29",
+                        "deadline": "2026-07-31",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533601296057940992&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 74,
+                        "name": "城轨及转向架制造中心风缸安装垫块等小型工装采购2026070005采购公告",
+                        "unit": "中车株洲电力机车有限公司",
+                        "category": "小型工装",
+                        "publish": "2026-07-29",
+                        "deadline": "2026-08-01",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534129415814702080&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 39,
+                        "name": "南宁局集团公司南宁机务段电动落轮机、柳州机务段ups不间断电源采购结果变更公示（第2包）",
+                        "unit": "南宁局集团公司南宁机务段",
+                        "category": "落轮机",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-07-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=2a80291b70116a85e10619053f79c257",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 40,
+                        "name": "中国铁路南昌局集团有限公司南昌局集团有限公司南昌南车辆段转向架落成专用吊具公开询价采购项目采购公告",
+                        "unit": "中国铁路南昌局集团有限公司南昌局集团有限公司南昌南车辆段",
+                        "category": "转向架",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-07-31 10:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=cc83819001c384de2a7263c9aabecd7e",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 43,
+                        "name": "内蒙古集通铁路（集团）有限责任公司大板综合维修段发布公开询价搬运平板车钢轨转向架服务项目公告采购公告",
+                        "unit": "大板综合维修段",
+                        "category": "转向架",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=6ef02e1f8af393d9d50b7493595434b6",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 48,
+                        "name": "贵阳车辆段后巢客整所DC600V地面电源大修工程施工比选公告",
+                        "unit": "贵阳车辆段",
+                        "category": "地面电源",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-08-06",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=13620c665a5eb9b46e512270decb6c2d",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 49,
+                        "name": "中国铁路广州局集团有限公司长沙车辆段3台DC600V地面电源设备性能恢复整治采购公告",
+                        "unit": "中国铁路广州局集团有限公司长沙车辆段",
+                        "category": "地面电源",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=9c493dc4cdc27faba1f56911ca338597",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 62,
+                        "name": "浦镇公司工程杭州市城市轨道交通18号线一期工程电动客车采购及维保委外服务（电动客车及工艺设备采购部分）机电总包-场段设备-非标设备-移动式架车机竞标式询比（2026GYLGLB02667）2026070228采购公告",
+                        "unit": "中车南京浦镇车辆有限公司",
+                        "category": "架车机",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-07-31 12:00",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533392315716888576&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 75,
+                        "name": "浦镇公司物资常规管理项目辅助电气-辅助电气其它电源模块及其它-常用低压转换组件-直流电源模块竞标式询比（2026GYLGLB03328）2026070194采购公告",
+                        "unit": "中车南京浦镇车辆有限公司",
+                        "category": "直流电源",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-07-31",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533382962955840512&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 41,
+                        "name": "昆明局集团公司物资设备采购供应所关于集团公司车厢级主机转向架2监测卡等29项物资采购项目公告",
+                        "unit": "昆明局集团公司物资设备采购供应所",
+                        "category": "转向架",
+                        "publish": "2026-07-24",
+                        "deadline": "2026-07-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=502a11f888058649ae01610bbff6c4d9",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 42,
+                        "name": "中国铁路济南局集团有限公司中国铁路济南局集团有限公司济南工务机械段高价件卡特C27发动机修理、液力机械变速箱修理、边坡清筛机转向架委外四级修项目采购公告",
+                        "unit": "中国铁路济南局集团有限公司中国铁路济南局集团有限公司济南工务机械段",
+                        "category": "转向架",
+                        "publish": "2026-07-24",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=34010ac57b108c4a90ed93f606f9a243",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 55,
+                        "name": "中国铁路上海局集团有限公司上海局集团公司杭州机辆段JZ-7制动机试验台大修采购公告",
+                        "unit": "中国铁路上海局集团有限公司上海局集团公司杭州机辆段",
+                        "category": "试验台大修",
+                        "publish": "2026-07-24",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=c277ebee031c7cf76b26dc0a4f55e50c",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 59,
+                        "name": "西安局集团公司西安机车检修段轮驱跑合试验台整修委外服务采购公告",
+                        "unit": "中国铁路西安局集团有限公司西安机车检修段",
+                        "category": "轮驱跑合试验台",
+                        "publish": "2026-07-24",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=b1144e3814423fcf03b52420016e799b",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 76,
+                        "name": "山东机辆公司风缸线风水压试验台改造设备采购2026070026采购公告",
+                        "unit": "中车山东风电有限公司",
+                        "category": "风水压试验台",
+                        "publish": "2026-07-23",
+                        "deadline": "2026-07-31",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529946447751821312&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 35,
+                        "name": "上海大机运用检修段2026年机械动力设备维保包件5电动架车机维保采购公告",
+                        "unit": "上海大机运用检修段",
+                        "category": "架车机",
+                        "publish": "2026-07-22",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=eed3f082eadd64d0878f1187cf02be36",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 38,
+                        "name": "上海大机运用检修段2026年机械动力设备维保包件8移车台、电动落轮机维保采购公告",
+                        "unit": "上海大机运用检修段",
+                        "category": "落轮机",
+                        "publish": "2026-07-22",
+                        "deadline": "2026-08-04",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=44cbee906c596bedcd2e300bceb8c7df",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 79,
+                        "name": "四方所-复兴号动车组烟火探头自动化测试试验台-设备类-20260702竞标式询比2026070002采购公告",
+                        "unit": "中车青岛四方车辆研究所有限公司",
+                        "category": "试验台",
+                        "publish": "2026-07-22",
+                        "deadline": "2026-07-31",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529066095009108992&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 58,
+                        "name": "郑州局焦作车辆段轮对轴承磨合机更新采购公告",
+                        "unit": "中国铁路郑州局集团有限公司",
+                        "category": "轴承磨合机",
+                        "publish": "2026-07-20",
+                        "deadline": "2026-07-31 08:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=3783dde00ef0127a8c977c326164c19c",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 51,
+                        "name": "沈阳局集团公司长春车辆段2026-2028年车下电源故障修、油压减振器大修业务外包（框架采购）招标公告",
+                        "unit": "中国铁路沈阳局集团有限公司长春车辆段",
+                        "category": "油压减振器",
+                        "publish": "2026-07-16",
+                        "deadline": "2026-08-06",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=fadeaa381264159b2cee428558ff115d",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 37,
+                        "name": "郑州局集团公司洛阳机务段移动式架车机购置公开采购项目招标公告",
+                        "unit": "郑州局集团公司洛阳机务段",
+                        "category": "架车机",
+                        "publish": "2026-07-10",
+                        "deadline": "2026-07-31 15:00",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=11cda3488c302d4547f550da089dc177",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 47,
+                        "name": "大秦铁路股份有限公司2026年度车辆设备（台车自动吊钩、轴承压装机等）购置项目招标公告",
+                        "unit": "大秦铁路股份有限公司",
+                        "category": "轴承压装机",
+                        "publish": "2026-07-10",
+                        "deadline": "2026-07-31 08:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=9ef4cc51bb21a938eef3e70217b579b2",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 81,
+                        "name": "2026年试验台类设备维修项目采购公告",
+                        "unit": "",
+                        "category": "试验台",
+                        "publish": "2026-07-08",
+                        "deadline": "2026-08-04 10:00",
+                        "link": "https://www.sizebid.com/002/shanghai/shanghai/2026/61b2204fcbcccd55ac2eaf1190ef7ed5.html",
+                        "platform": "上海地铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 82,
+                        "name": "南京至句容城际轨道交通工程句容车辆段电客车架大修工艺设备采购项目招标公告",
+                        "unit": "南京地铁运营有限责任公司",
+                        "category": "工艺转向架",
+                        "publish": "2026-08-11",
+                        "deadline": "2026-08-11",
+                        "link": "https://www.zbytb.com/s-zb-68110758.html",
+                        "platform": "其他",
+                        "priority": "中"
+            },
+            {
+                        "id": 50,
+                        "name": "中国铁路上海局集团有限公司上铁机辆公司上海动壹分公司自主修油压减振器油及油脂等采购公告",
+                        "unit": "中国铁路上海局集团有限公司上铁机辆公司上海动壹分公司",
+                        "category": "油压减振器",
+                        "publish": "2026-07-28",
+                        "deadline": "2026-08-07 08:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=7f1670b05872abe86f1d3a8b1babfce4",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 60,
+                        "name": "中国铁路上海局集团有限公司上海机辆段新增微机控制三阀试验台项目招标公告",
+                        "unit": "中国铁路上海局集团有限公司上海机辆段",
+                        "category": "试验台",
+                        "publish": "2026-07-27",
+                        "deadline": "2026-08-17 09:00",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=cf9b68f023ae69d7889a33343c883189",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 44,
+                        "name": "柳州机车车辆有限公司厂修铁道客车转向架弹簧采购招标公告 （招标编号：宁铁代物招〔2026〕053号）",
+                        "unit": "柳州机车车辆有限公司厂",
+                        "category": "转向架",
+                        "publish": "2026-07-23",
+                        "deadline": "2026-08-13 08:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=ce1d85eb3dd32ed1c34639d6cd94208a",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 80,
+                        "name": "石家庄铁道大学一流学科建设水平提升项目-轨道交通装备智能运维试验系统公开招标公告",
+                        "unit": "",
+                        "category": "试验台",
+                        "publish": "2026-07-23",
+                        "deadline": "2026-08-17",
+                        "link": "https://www.ccgp.gov.cn/cggg/dfgg//gkzb/202607/t20260723_26993935.htm",
+                        "platform": "其他",
+                        "priority": "中"
+            },
+            {
+                        "id": 45,
+                        "name": "上海局集团公司合肥车辆段客车转向架紧固件招标公告",
+                        "unit": "中国铁路上海局集团有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-21",
+                        "deadline": "2026-08-12 13:40",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=b2f33126092dc0770cd4778affaee692",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 56,
+                        "name": "中国铁路哈尔滨局集团有限公司中国铁路哈尔滨局集团有限公司哈尔滨大功率机车检修段牵引电机综合试验台大修项目业务外包项目招标公告",
+                        "unit": "中国铁路哈尔滨局集团有限公司中国铁路哈尔滨局集团有限公司哈尔滨大功率机车检修段",
+                        "category": "试验台大修",
+                        "publish": "2026-07-21",
+                        "deadline": "2026-08-12",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=31a7b2f7c97bd4889f0cca82db8896cb",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 57,
+                        "name": "中国铁路武汉局集团有限公司襄阳机务段微控软管水压试验台购置项目招标公告",
+                        "unit": "中国铁路武汉局集团有限公司襄阳机务段",
+                        "category": "软管水压试验台",
+                        "publish": "2026-07-21",
+                        "deadline": "2026-08-12 09:00",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=4ad22f96515d4a470f125cd2cb380974",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 36,
+                        "name": "中国铁路武汉局集团有限公司襄阳车辆段站修液压架车机购置项目招标公告",
+                        "unit": "中国铁路武汉局集团有限公司襄阳车辆段",
+                        "category": "架车机",
+                        "publish": "2026-07-20",
+                        "deadline": "2026-08-10 14:30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=d53e1ce674ab7cca623d16ae4c43dcef",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 46,
+                        "name": "转向架车间轮对荧光磁粉探伤机大修采购公告",
+                        "unit": "中国铁路北京局集团有限公司北京动车段",
+                        "category": "转向架",
+                        "publish": "2026-07-20",
+                        "deadline": "2026-12-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=fa3922590889a23a074f3ea4f9210781",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 61,
+                        "name": "南宁局集团公司正火设备、传动轴动平衡试验台、阀件试验台采购招标二次公告 （招标编号：宁物招〔2026〕104号）（第1包）",
+                        "unit": "中国铁路南宁局集团有限公司",
+                        "category": "试验台",
+                        "publish": "2026-06-17",
+                        "deadline": "2026-12-30",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=6kl5gjl77r7vulz5x0fudh129zeq7f5lia0q",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 52,
+                        "name": "南宁局集团公司南宁车辆段动车组油压减振器检修业务外包采购项目招标二次公告 （招标编号：宁铁代服招〔2026〕201号）",
+                        "unit": "中国铁路南宁局集团有限公司南宁车辆段",
+                        "category": "油压减振器",
+                        "publish": "2026-05-11",
+                        "deadline": "2026-12-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=83i4f5plskh6g72acxvuevxa25gk7abngak4",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 53,
+                        "name": "2026年中铁特货物流股份有限公司广州机械保温车辆段35吨隔热箱及40英尺冷藏箱箱体配件项目采购公告（二）",
+                        "unit": "年中铁特货物流股份有限公司广州机械保温车辆段",
+                        "category": "箱体配件",
+                        "publish": "2026-03-11",
+                        "deadline": "2026-12-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=26e29b740eb7e4817d0a56d099f0165b",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 54,
+                        "name": "2026年中铁特货物流股份有限公司广州机械保温车辆段35吨隔热箱及40英尺冷藏箱箱体配件项目采购公告（一）",
+                        "unit": "年中铁特货物流股份有限公司广州机械保温车辆段",
+                        "category": "箱体配件",
+                        "publish": "2026-03-06",
+                        "deadline": "2026-12-31",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=f5e98fe5a80f3fea603b2055e3baa2d0",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
             }
         ];
         const priorityOrder = { '高': 0, '中': 1, '低': 2 };
