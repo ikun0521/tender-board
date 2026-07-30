@@ -497,10 +497,14 @@
             <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
                 <p class="text-sm font-semibold text-slate-900 mb-1">人工覆盖</p>
                 <p class="text-xs text-slate-500 mb-3">手动升级/降级的记录会永久生效，不受阈值和评分影响</p>
-                <div class="flex items-center gap-3 text-sm">
+                <div class="flex items-center gap-2 text-sm flex-wrap">
                     <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">升级 <b id="cntPromoted">0</b></span>
                     <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">降级 <b id="cntDemoted">0</b></span>
-                    <button onclick="clearOverrides()" class="ml-auto text-xs text-red-600 hover:text-red-800 underline">清空覆盖</button>
+                    <span class="px-2.5 py-1 rounded-lg bg-red-50 text-red-600 border border-red-200">删除 <b id="cntDeleted">0</b></span>
+                </div>
+                <div class="mt-2 flex items-center gap-3">
+                    <button onclick="clearOverrides()" class="text-xs text-red-600 hover:text-red-800 underline">清空覆盖</button>
+                    <button onclick="restoreDeleted()" class="text-xs text-slate-500 hover:text-slate-800 underline">恢复删除</button>
                 </div>
             </div>
 
@@ -1120,7 +1124,8 @@
             ],
             excludeWords: ['驾校', '汽车驾驶', '客车租赁', '租车', '驾驶培训'],
             promoted: [],
-            demoted: []
+            demoted: [],
+            deletedIds: []
         };
 
         const ACTION_WORDS = ['采购', '招标', '购置', '询价', '竞争性谈判', '竞价', '比选', '磋商', '公开征集', '项修', '大修', '维保'];
@@ -1223,9 +1228,10 @@
 
         function isPromoted(id) { return (filterConfig.promoted || []).map(String).includes(String(id)); }
         function isDemoted(id) { return (filterConfig.demoted || []).map(String).includes(String(id)); }
+        function isDeleted(id) { return (filterConfig.deletedIds || []).map(String).includes(String(id)); }
 
-        function primaryTenders() { return tenders.filter(t => getTier(t, filterConfig) === 'primary'); }
-        function extraTenders() { return tenders.filter(t => getTier(t, filterConfig) === 'extra'); }
+        function primaryTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'primary'); }
+        function extraTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'extra'); }
 
         function scoreColor(score) {
             if (score >= filterConfig.threshold) return { bar: '#059669', text: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' };
@@ -1270,6 +1276,39 @@
             if (!confirm('确定要清空所有人工升级/降级记录吗？分级将完全回到评分判定。')) return;
             filterConfig.promoted = [];
             filterConfig.demoted = [];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /** 手动删除某条信息（软删除：记入 deletedIds，前端过滤不显示；人工导入项同时真删 COS） */
+        function deleteTender(id) {
+            id = String(id);
+            if (!confirm('确定要删除这条信息吗？删除后将从看板消失（可在工具栏「恢复删除」找回）。')) return;
+            filterConfig.deletedIds = (filterConfig.deletedIds || []).map(String).filter(x => x !== id);
+            filterConfig.deletedIds.push(id);
+            // 同步清掉该条的人工升降级覆盖，避免脏数据
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            persistFilterConfig();
+            // 若属于人工导入数据，同时从 COS 真删除
+            if (typeof manualTenders !== 'undefined' && Array.isArray(manualTenders) && manualTenders.some(t => String(t.id) === id)) {
+                deleteManualTender(id)
+                    .then(() => {
+                        manualTenders = manualTenders.filter(t => String(t.id) !== id);
+                        mergeManualTenders();
+                        refreshAll();
+                    })
+                    .catch(() => refreshAll());
+            } else {
+                refreshAll();
+            }
+        }
+
+        /** 恢复全部被软删除的信息 */
+        function restoreDeleted() {
+            if (!(filterConfig.deletedIds || []).length) { alert('当前没有已删除的信息。'); return; }
+            if (!confirm('确定要恢复所有已删除的信息吗？')) return;
+            filterConfig.deletedIds = [];
             persistFilterConfig();
             refreshAll();
         }
@@ -1362,6 +1401,7 @@
             Object.keys(WORD_LIST_META).forEach(renderWordList);
             document.getElementById('cntPromoted').textContent = (filterConfig.promoted || []).length;
             document.getElementById('cntDemoted').textContent = (filterConfig.demoted || []).length;
+            document.getElementById('cntDeleted').textContent = (filterConfig.deletedIds || []).length;
             updateConfigPreview();
         }
 
@@ -1755,15 +1795,16 @@
                             }
                         </td>
                         <td class="col-link px-4 py-4 whitespace-nowrap">
-                            ${t.link 
+                            <div>${t.link 
                                 ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center font-medium text-blue-600 hover:text-blue-800 transition-colors">
                                     查看公告
                                     <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                                 </a>`
-                                : `<button data-delete-id="${t.id}" class="delete-btn table-text inline-flex items-center px-2.5 py-1 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-colors border border-red-200" title="删除此条人工导入记录">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>`
-                            }
+                                : '<span class="text-xs text-slate-300">—</span>'}</div>
+                            <button data-delete-id="${t.id}" class="delete-btn mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-md font-medium text-red-500 hover:bg-red-50 transition-colors border border-red-200 text-[11px]" title="删除此条信息">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                删除
+                            </button>
                         </td>
                         <td class="w-[130px] min-w-[130px] px-4 py-4 whitespace-nowrap">
                             <button data-id="${t.id}" class="state-btn table-text inline-flex items-center px-3 py-1.5 rounded-lg font-medium transition-colors ${REVIEW_BUTTON_CLASS[state]}">
@@ -1821,7 +1862,13 @@
                         ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-600 hover:text-blue-800">查看 ↗</a>` : '<span class="text-xs text-slate-300">—</span>'}
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
-                        <button data-promote-id="${t.id}" class="promote-btn text-xs font-bold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors" title="升级为一级信息">⬆ 升为一级</button>
+                        <div class="flex items-center gap-2">
+                            <button data-promote-id="${t.id}" class="promote-btn text-xs font-bold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors" title="升级为一级信息">⬆ 升为一级</button>
+                            <button data-delete-id="${t.id}" class="delete-btn text-xs inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors" title="删除此条信息">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                删除
+                            </button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -2003,22 +2050,16 @@
             }
             const delBtn = e.target.closest('.delete-btn');
             if (delBtn && delBtn.dataset.deleteId) {
-                if (confirm('确定要删除这条人工导入的记录吗？')) {
-                    deleteManualTender(delBtn.dataset.deleteId).then(() => {
-                        manualTenders = manualTenders.filter(t => String(t.id) !== String(delBtn.dataset.deleteId));
-                        mergeManualTenders();
-                        renderTable();
-                        updateStats();
-                        initCharts();
-                    });
-                }
+                deleteTender(delBtn.dataset.deleteId);
             }
         });
 
-        // 多余信息区：升级按钮
+        // 多余信息区：升级 / 删除按钮
         document.getElementById('extraTableBody').addEventListener('click', function (e) {
             const btn = e.target.closest('.promote-btn');
-            if (btn && btn.dataset.promoteId) promoteTender(btn.dataset.promoteId);
+            if (btn && btn.dataset.promoteId) { promoteTender(btn.dataset.promoteId); return; }
+            const delBtn = e.target.closest('.delete-btn');
+            if (delBtn && delBtn.dataset.deleteId) deleteTender(delBtn.dataset.deleteId);
         });
 
         // 工具栏：词表删除（事件委托）
