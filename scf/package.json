@@ -1,0 +1,10 @@
+{
+  "name": "tender-board-scf",
+  "version": "1.0.0",
+  "description": "招标看板后端 - 腾讯云函数 + COS",
+  "main": "index.js",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^3.0.0"
+  },
+  "license": "MIT"
+}

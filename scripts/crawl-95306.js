@@ -1,0 +1,606 @@
+#!/usr/bin/env node
+/**
+ * 国铁采购平台（cg.95306.cn）招标公告爬虫
+ * =============================================================
+ *
+ * 【接口逆向说明】
+ * 站点是 jQuery + layui 传统架构，页面 HTML 只是空壳，数据全部走两个 AJAX 接口：
+ *   列表：POST /proxy/portal/elasticSearch/queryDataToEs
+ *   详情：POST /proxy/portal/elasticSearch/indexView
+ *
+ * 无需登录、无需 token（Authorization 传空即可）。
+ *
+ * 【验证码机制 —— 关键】
+ * 平台的滑块验证码不是入口墙，而是**频率限制**：
+ *   - 请求参数里的 mhId 是前端 FingerprintJS v4 生成的浏览器指纹（32位hex）
+ *   - 服务端按 mhId 累计请求次数，同一 mhId 约 3 次后即拒绝，
+ *     前端随即弹出滑块验证码，滑过后调 /elasticSearch/checkRequestNumValidateCode 重置计数
+ *   - 由于 mhId 完全由客户端生成，本脚本为每个请求生成独立 mhId，从而不触发计数
+ * 实测 30 次连续请求成功率 100%。
+ * 注意：仍保留请求间隔（REQUEST_INTERVAL），避免对服务器造成压力。
+ *
+ * 【截止日期策略 —— 与中车购相反，务必注意】
+ * 列表/详情返回的 latestDocumentSaleEndTime 只是「采购文件获取 / 报名截止」，
+ * 真正的「投标文件递交截止」在正文里，且通常更晚。实测：
+ *   上海机辆段三阀试验台      报名截止 08-02 08:00  →  投标截止 08-17 09:00
+ *   杭州机辆段JZ-7制动机试验台 报名截止 07-29 12:00  →  报价截止 08-04 10:00
+ * 因此策略为：**正文解析（deadline-parser）优先，latestDocumentSaleEndTime 仅作兜底**。
+ * 若反过来只信 latestDocumentSaleEndTime，会把大量仍可投标的项目误判为已过期。
+ *
+ * 【公告类型字典 noticeType】
+ *   01 项目公告(可投标)  02 变更公告  03 补遗公告  04 中标公示
+ *   05 结果公告          06 采购方式公示  07 结果公示
+ * 默认只抓 01（+02，因变更公告常含新的截止时间），服务端直接过滤，效率最高。
+ *
+ * 【采购方式字典 bidType】
+ *   01 招标  02 竞价采购  03 询价采购  04 单一来源
+ *   05 谈判采购  06 需求信息  08 直接采购(应急)  10 拍卖
+ *
+ * 用法：
+ *   node scripts/crawl-95306.js --keywords "试验台,架车机" [options]
+ *   node scripts/crawl-95306.js                       # 自动读取 COS 关键词
+ *
+ * 选项：
+ *   --keywords <a,b,c>   指定关键词（逗号分隔），缺省则从 COS API / 本地文件读取
+ *   --notice-type <t>    公告类型，默认 "01,02"；传 "all" 抓全部
+ *   --pages <n>          每个关键词翻几页，默认 1（每页 10 条）
+ *   --detail             抓取详情正文并解析投标截止日期（强烈建议开启）
+ *   --no-filter          不过滤已截止项目（默认仅保留 截止 >= 明天 与 待确认）
+ *   --keep-auction       保留废旧物资处置/拍卖类（默认剔除）
+ *   --days <n>           仅保留最近 n 天内发布的公告，默认不限
+ *   --out <file>         输出 JSON 路径，默认 scripts/95306-candidates.json
+ *   --verbose            打印每条抓取明细
+ */
+
+const crypto = require('crypto');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { parseDeadline } = require('./lib/deadline-parser');
+
+const ROOT = path.resolve(__dirname, '..');
+const HOST = 'cg.95306.cn';
+const BASE = '/proxy/portal';
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const LIST_REFERER =
+  'https://cg.95306.cn/baseinfor/notice/toBuyNoticeMore?bidType=&noticeType=';
+const REQUEST_INTERVAL = 220; // ms，礼貌节流
+
+const NOTICE_TYPE_NAMES = {
+  '01': '项目公告',
+  '02': '变更公告',
+  '03': '补遗公告',
+  '04': '中标公示',
+  '05': '结果公告',
+  '06': '采购方式公示',
+  '07': '结果公示',
+};
+
+// ============ 基础工具 ============
+
+/** 每次请求生成新的 mhId，绕开按指纹累计的频率限制 */
+function newMhId() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** 清洗 HTML：去标签、去搜索高亮 <span style="color:red">、还原实体 */
+function strip(s) {
+  return String(s == null ? '' : s)
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&ldquo;|&rdquo;/gi, '"')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 正文清洗：保留换行，便于 deadline-parser 按行匹配 */
+function stripBody(s) {
+  return String(s == null ? '' : s)
+    .replace(/<\s*(br|\/p|\/div|\/tr|\/li|\/h[1-6])\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&ldquo;|&rdquo;/gi, '"')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function post(apiPath, params) {
+  const mhId = newMhId();
+  const form = new URLSearchParams(
+    Object.assign({ mhId, Authorization: '' }, params)
+  ).toString();
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: HOST,
+        path: BASE + apiPath,
+        method: 'POST',
+        timeout: 25000,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Content-Length': Buffer.byteLength(form),
+          'User-Agent': UA,
+          'X-Requested-With': 'XMLHttpRequest',
+          Origin: 'https://cg.95306.cn',
+          Referer: LIST_REFERER,
+          Cookie: `mhId=${mhId}`,
+        },
+      },
+      (res) => {
+        let d = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(d));
+          } catch (e) {
+            reject(new Error(`非JSON响应 (HTTP ${res.statusCode}): ${d.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on('timeout', () => req.destroy(new Error('请求超时')));
+    req.on('error', reject);
+    req.write(form);
+    req.end();
+  });
+}
+
+// ============ 接口封装 ============
+
+async function searchList(keyword, { noticeType = '', pageNum = 1 } = {}) {
+  const res = await post('/elasticSearch/queryDataToEs', {
+    projBidType: '',
+    bidType: '',
+    noticeType,
+    wzType: '',
+    title: keyword,
+    disposalMethod: '',
+    startDate: '',
+    endDate: '',
+    sortCondition: '0',
+    pageNum: String(pageNum),
+  });
+  if (!res.success) {
+    throw new Error(`列表接口失败: ${res.msg || '(无消息，可能触发频率限制)'}`);
+  }
+  const rd = (res.data && res.data.resultData) || {};
+  return {
+    list: rd.result || [],
+    totalCount: rd.totalCount || 0,
+    totalPageCount: rd.totalPageCount || 0,
+  };
+}
+
+async function getDetail(noticeId) {
+  const res = await post('/elasticSearch/indexView', { noticeId });
+  if (!res.success || !res.data) return null;
+  const nc = res.data.noticeContent || {};
+  return {
+    title: strip(nc.notTitle),
+    body: stripBody(nc.notCont),
+    noticeType: nc.noticeType || '',
+    checkTime: nc.checkTime || '',
+    projCode: nc.projCode || nc.biddingProjCode || '',
+    latestEnd: nc.latestDocumentSaleEndTime || '',
+  };
+}
+
+// ============ 关键词加载 ============
+
+function getArg(name, def) {
+  const i = process.argv.indexOf(`--${name}`);
+  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : def;
+}
+
+function hasFlag(name) {
+  return process.argv.includes(`--${name}`);
+}
+
+async function loadKeywords() {
+  const cli = getArg('keywords', '');
+  if (cli) {
+    return cli
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  // 优先 COS API
+  try {
+    const txt = await new Promise((resolve, reject) => {
+      https
+        .get(
+          'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords',
+          { timeout: 15000 },
+          (res) => {
+            let d = '';
+            res.setEncoding('utf8');
+            res.on('data', (c) => (d += c));
+            res.on('end', () => resolve(d));
+          }
+        )
+        .on('error', reject)
+        .on('timeout', function () {
+          this.destroy(new Error('timeout'));
+        });
+    });
+    const arr = JSON.parse(txt);
+    if (Array.isArray(arr) && arr.length) {
+      console.log(`[关键词] 从 COS API 读取 ${arr.length} 个`);
+      return arr;
+    }
+  } catch (e) {
+    console.log(`[关键词] COS API 失败 (${e.message})，回退本地文件`);
+  }
+
+  const local = path.join(ROOT, '产品关键词.txt');
+  if (fs.existsSync(local)) {
+    const arr = fs
+      .readFileSync(local, 'utf8')
+      .split(/[,，\r\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    console.log(`[关键词] 从本地文件读取 ${arr.length} 个`);
+    return arr;
+  }
+  throw new Error('无法获取关键词');
+}
+
+// ============ 业务过滤 ============
+
+/** 结果类公告（不可投标），标题兜底判断 */
+const RESULT_NOTICE_RE =
+  /(中标公示|中标结果|成交公告|成交公示|成交候选人|中标候选人|评审结果|结果公告|结果公示|流标公告|废标公告|终止公告|采购方式公示|直接采购公示|单一来源公示)/;
+
+/**
+ * 废旧物资处置 / 拍卖类。
+ * 这类是平台"卖废品"（如"废货车轴承物资处置"），方向与采购相反，
+ * 但因标题含关键词会被搜出来，默认剔除。--keep-auction 可保留。
+ */
+const AUCTION_RE = /(物资处置|废旧物资|废钢|报废|处置项目|资产处置|拍卖)/;
+
+/**
+ * 国铁专用单位兜底提取。
+ * 国铁公告标题绝大多数以采购单位名开头，但部分不带「中国铁路…局集团有限公司」前缀
+ * （如「上海大机运用检修段…」「2026年成都电务段…」「【北京铁科英迈技术有限公司】…」），
+ * sync-tenders 的通用模式覆盖不到，这里按国铁命名习惯补一层。
+ */
+function extractUnitFrom95306Title(title) {
+  if (!title) return '';
+  let s = String(title).trim();
+
+  // 【单位名】开头
+  const bracket = s.match(/^[【\[]\s*([\u4e00-\u9fa5A-Za-z0-9（）()]{4,40}?)\s*[】\]]/);
+  if (bracket && /(?:公司|集团|局|段|所|厂|院|中心)$/.test(bracket[1])) {
+    return bracket[1];
+  }
+
+  // 去掉开头的年份 / 编号噪音
+  s = s.replace(/^(?:\d{4}\s*年度?|20\d{2})\s*/, '');
+
+  // 以铁路单位后缀结尾的开头片段
+  const m = s.match(
+    /^([\u4e00-\u9fa5]{2,30}?(?:机务段|车辆段|供电段|电务段|工务段|车务段|检修段|机辆段|大修段|客运段|运用检修段|段|所|厂|车间|中心|研究院|设计院))/
+  );
+  if (m) {
+    const u = m[1];
+    // 过滤明显不是单位的（如"电机库"、"通道"）
+    if (u.length >= 4 && !/(库|通道|棚|楼|室|线|站台)$/.test(u)) return u;
+  }
+
+  // 以公司名开头
+  const c = s.match(
+    /^([\u4e00-\u9fa5]{2,30}?(?:有限公司|股份有限公司|集团有限公司|有限责任公司))/
+  );
+  if (c) return c[1];
+
+  return '';
+}
+
+/**
+ * 修正单位名中连续重复的机构名。
+ * 国铁部分公告标题存在源数据重复（如"中国铁路济南局集团有限公司中国铁路济南局集团有限公司青岛机务段"），
+ * 导致提取出的单位名带重复前缀。
+ */
+function dedupUnitName(unit) {
+  if (!unit) return unit;
+  let s = unit.trim();
+  // 形如 XXX公司XXX公司... → 去掉重复段
+  const m = s.match(/^(.{6,}?(?:公司|集团|局|段|所|厂|院|中心))\1+/);
+  if (m) s = s.slice(m[1].length);
+  // 兜底：整体前后两半完全相同
+  const half = Math.floor(s.length / 2);
+  if (s.length % 2 === 0 && s.slice(0, half) === s.slice(half)) s = s.slice(0, half);
+  return s.trim();
+}
+
+function todayPlusDays(days) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function parseDateLoose(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * 合并截止日期。
+ * 与中车购相反：国铁正文里的「投标/报价递交截止」才是真正的投标截止，
+ * latestDocumentSaleEndTime 只是报名/文件获取截止，仅作兜底。
+ */
+function mergeDeadline(parsedValue, latestEnd) {
+  if (parsedValue) return { value: parsedValue, from: 'body' };
+  if (latestEnd) {
+    const t = String(latestEnd).trim().replace(/:00$/, '');
+    return { value: t, from: 'latestDocumentSaleEndTime' };
+  }
+  return { value: '待确认', from: 'none' };
+}
+
+// ============ 主流程 ============
+
+async function main() {
+  const noticeTypeArg = getArg('notice-type', '01,02');
+  const noticeTypes =
+    noticeTypeArg === 'all'
+      ? ['']
+      : noticeTypeArg.split(',').map((s) => s.trim()).filter(Boolean);
+  const pages = parseInt(getArg('pages', '1'), 10) || 1;
+  const withDetail = hasFlag('detail');
+  const noFilter = hasFlag('no-filter');
+  const verbose = hasFlag('verbose');
+  const daysLimit = parseInt(getArg('days', '0'), 10) || 0;
+  const outFile = path.resolve(ROOT, getArg('out', 'scripts/95306-candidates.json'));
+
+  const keywords = await loadKeywords();
+  console.log(
+    `[配置] 关键词 ${keywords.length} 个 | 公告类型 ${noticeTypeArg} | 每词 ${pages} 页 | 详情 ${withDetail ? '开' : '关'}`
+  );
+  console.log('');
+
+  const byId = new Map();
+  let queried = 0;
+  let failed = 0;
+
+  for (const kw of keywords) {
+    for (const nt of noticeTypes) {
+      for (let p = 1; p <= pages; p++) {
+        try {
+          const { list, totalCount } = await searchList(kw, {
+            noticeType: nt,
+            pageNum: p,
+          });
+          queried++;
+          if (p === 1 && verbose) {
+            console.log(
+              `[搜索] "${kw}" 类型${nt || 'all'} → 命中 ${totalCount} 条，取前 ${list.length}`
+            );
+          }
+          for (const item of list) {
+            const title = strip(item.notTitle);
+            if (!title) continue;
+            if (!byId.has(item.id)) {
+              byId.set(item.id, {
+                id: item.id,
+                name: title,
+                noticeTypeName: item.noticeTypeName || NOTICE_TYPE_NAMES[nt] || '',
+                bidTypeName: item.bidTypeName || '',
+                professionalName: item.professionalName || '',
+                publish: (item.checkTime || '').split(' ')[0],
+                latestEnd: item.latestDocumentSaleEndTime || '',
+                digest: strip(item.digest),
+                keyword: kw,
+              });
+            }
+          }
+          if (list.length === 0) break; // 没有更多了
+        } catch (e) {
+          failed++;
+          console.log(`[警告] "${kw}" 类型${nt || 'all'} 第${p}页 失败: ${e.message}`);
+        }
+        await sleep(REQUEST_INTERVAL);
+      }
+    }
+  }
+
+  let candidates = [...byId.values()];
+  console.log(
+    `\n[去重] ${queried} 次查询（失败 ${failed}），去重后 ${candidates.length} 条公告`
+  );
+
+  // 结果类公告过滤（服务端已按 noticeType 过滤，这里按标题再兜一层）
+  if (noticeTypeArg !== 'all') {
+    const before = candidates.length;
+    candidates = candidates.filter((c) => !RESULT_NOTICE_RE.test(c.name));
+    if (before !== candidates.length) {
+      console.log(`[类型过滤] 剔除结果公示类 ${before - candidates.length} 条`);
+    }
+  }
+
+  // 废旧物资处置 / 拍卖过滤
+  if (!hasFlag('keep-auction')) {
+    const before = candidates.length;
+    candidates = candidates.filter(
+      (c) => !AUCTION_RE.test(c.name) && c.bidTypeName !== '拍卖'
+    );
+    if (before !== candidates.length) {
+      console.log(`[拍卖过滤] 剔除废旧物资处置类 ${before - candidates.length} 条`);
+    }
+  }
+
+  // 发布时间过滤
+  if (daysLimit > 0) {
+    const cutoff = todayPlusDays(-daysLimit);
+    const before = candidates.length;
+    candidates = candidates.filter((c) => {
+      const d = parseDateLoose(c.publish);
+      return !d || d >= cutoff;
+    });
+    console.log(`[时间过滤] 仅保留近 ${daysLimit} 天，剔除 ${before - candidates.length} 条`);
+  }
+
+  // 抓详情解析截止日期
+  if (withDetail && candidates.length) {
+    console.log(`\n[详情] 开始抓取 ${candidates.length} 条正文...`);
+    let done = 0;
+    let idx = 0;
+    const CONCURRENCY = 3;
+
+    async function worker() {
+      while (idx < candidates.length) {
+        const c = candidates[idx++];
+        try {
+          const d = await getDetail(c.id);
+          if (d) {
+            c.body = d.body;
+            c.projCode = d.projCode;
+            if (d.latestEnd) c.latestEnd = d.latestEnd;
+            if (d.noticeType) {
+              c.noticeType = d.noticeType;
+              c.noticeTypeName = NOTICE_TYPE_NAMES[d.noticeType] || c.noticeTypeName;
+            }
+            const parsed = parseDeadline(d.body, c.publish);
+            const merged = mergeDeadline(
+              parsed && parsed.value ? parsed.value : '',
+              c.latestEnd
+            );
+            c.deadline = merged.value;
+            c.deadlineSource = merged.from;
+            c.deadlineLabel = parsed && parsed.source ? parsed.source : '';
+          } else {
+            const merged = mergeDeadline('', c.latestEnd);
+            c.deadline = merged.value;
+            c.deadlineSource = merged.from;
+          }
+        } catch (e) {
+          const merged = mergeDeadline('', c.latestEnd);
+          c.deadline = merged.value;
+          c.deadlineSource = merged.from;
+        }
+        done++;
+        if (done % 20 === 0) console.log(`       ...${done}/${candidates.length}`);
+        await sleep(REQUEST_INTERVAL);
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    console.log(`[详情] 完成 ${done} 条`);
+  } else {
+    for (const c of candidates) {
+      const merged = mergeDeadline('', c.latestEnd);
+      c.deadline = merged.value;
+      c.deadlineSource = merged.from;
+    }
+  }
+
+  // 招标单位提取（复用 sync-tenders 已调优的逻辑）
+  let extractUnit = null;
+  try {
+    ({ extractUnit } = require('./sync-tenders'));
+  } catch (e) {
+    /* 忽略，退化为不提取 */
+  }
+  for (const c of candidates) {
+    if (extractUnit) {
+      try {
+        c.unit = dedupUnitName(extractUnit(c.body || c.digest || '', c.name) || '');
+      } catch (e) {
+        c.unit = '';
+      }
+    } else {
+      c.unit = '';
+    }
+    // 通用逻辑未命中时，用国铁命名习惯兜底
+    if (!c.unit) c.unit = dedupUnitName(extractUnitFrom95306Title(c.name));
+  }
+
+  // 截止日期过滤
+  if (!noFilter) {
+    const tomorrow = todayPlusDays(1);
+    const before = candidates.length;
+    candidates = candidates.filter((c) => {
+      if (!c.deadline || c.deadline === '待确认') return true;
+      const d = parseDateLoose(c.deadline);
+      return !d || d >= tomorrow;
+    });
+    console.log(`[截止过滤] 剔除已截止 ${before - candidates.length} 条`);
+  }
+
+  // 输出
+  const out = candidates.map((c) => ({
+    name: c.name,
+    unit: c.unit,
+    publish: c.publish,
+    deadline: c.deadline,
+    link: `https://cg.95306.cn/baseinfor/notice/informationShow?id=${c.id}`,
+    platform: '国铁采购平台',
+    noticeType: c.noticeTypeName,
+    bidType: c.bidTypeName,
+    professional: c.professionalName,
+    projCode: c.projCode || '',
+    keyword: c.keyword,
+    deadlineSource: c.deadlineSource,
+    snippet: (c.digest || '').slice(0, 200),
+  }));
+
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, JSON.stringify(out, null, 2), 'utf8');
+
+  const pending = out.filter((x) => x.deadline === '待确认').length;
+  const fromBody = out.filter((x) => x.deadlineSource === 'body').length;
+  const withUnit = out.filter((x) => x.unit).length;
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`候选总数        : ${out.length}`);
+  console.log(
+    `有明确截止日期  : ${out.length - pending} (${out.length ? (((out.length - pending) / out.length) * 100).toFixed(1) : 0}%)`
+  );
+  console.log(`  └ 来自正文解析: ${fromBody}（投标截止，权威）`);
+  console.log(`  └ 来自报名截止: ${out.length - pending - fromBody}（兜底）`);
+  console.log(`待确认          : ${pending}`);
+  console.log(
+    `有招标单位      : ${withUnit} (${out.length ? ((withUnit / out.length) * 100).toFixed(1) : 0}%)`
+  );
+  console.log(`输出文件        : ${outFile}`);
+  console.log('='.repeat(60));
+
+  if (verbose) {
+    out.slice(0, 30).forEach((x, i) => {
+      console.log(
+        `\n[${i + 1}] ${x.name}\n    单位: ${x.unit || '(未识别)'}\n    ${x.noticeType} | ${x.bidType} | 发布 ${x.publish} | 截止 ${x.deadline} (${x.deadlineSource})`
+      );
+    });
+  }
+
+  if (out.length === 0) {
+    console.log(
+      '\n[!] 本次抓取 0 条。若持续为 0，可能是接口变更或被限流，请检查脚本。'
+    );
+    process.exitCode = 2;
+  }
+}
+
+main().catch((e) => {
+  console.error('[致命错误]', e.message);
+  process.exit(1);
+});

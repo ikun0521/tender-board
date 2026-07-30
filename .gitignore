@@ -1,0 +1,21 @@
+# Secrets / credentials
+.env
+
+# Dependencies — deployment uses a prebuilt zip package, not committed node_modules
+node_modules/
+
+# Build / deploy artifacts
+*.zip
+
+# Local spreadsheet exports
+*.xls
+*.xlsx
+
+# Manual backups
+index_backup.html
+
+# Transient automation outputs
+.workbuddy/tmp_*.json
+.workbuddy/tmp_*/
+scripts/*-candidates.json
+scripts/search-results-targeted.json

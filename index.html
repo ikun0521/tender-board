@@ -28,6 +28,18 @@
         .col-platform { width: 150px; min-width: 150px; }
         .col-link { width: 100px; min-width: 100px; }
         .table-text { font-size: 0.9375rem; line-height: 1.5rem; }
+        /* ---- 侧边工具栏 ---- */
+        #toolDrawer { transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        #toolDrawer.closed { transform: translateX(100%); }
+        #drawerMask { transition: opacity 0.35s ease; }
+        .drawer-tab.active { background: #0f172a; color: #fff; }
+        .drawer-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+        .drawer-scroll::-webkit-scrollbar { width: 6px; }
+        .drawer-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .word-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 12px; line-height: 20px; }
+        .score-bar { height: 5px; border-radius: 3px; background: #e2e8f0; overflow: hidden; }
+        .score-bar > i { display: block; height: 100%; border-radius: 3px; }
+        input[type=range] { accent-color: #0f172a; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
@@ -37,7 +49,7 @@
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-900 tracking-tight">招标信息可视化看板</h1>
-                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 共 <span id="totalCount" class="font-semibold text-slate-700">34</span> 条招标信息</p>
+                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">34</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-sm text-slate-500">最近更新：2026-07-30 14:43</span>
@@ -228,11 +240,277 @@
             </div>
         </div>
 
+        <!-- 二级：多余信息 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 mt-6 fade-in overflow-hidden" style="animation-delay: 0.45s">
+            <button id="extraToggle" onclick="toggleExtraPanel()" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors focus:outline-none">
+                <span class="flex items-center gap-3">
+                    <span class="text-lg font-semibold text-slate-700">🗂️ 多余信息</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        <span id="extraCount">0</span> 条
+                    </span>
+                    <span class="text-sm text-slate-400 hidden sm:inline">相关度低于门槛，已折叠收纳</span>
+                </span>
+                <span id="extraArrow" class="text-slate-500 transition-transform duration-300 transform">▶</span>
+            </button>
+            <div id="extraBody" class="overflow-hidden transition-all duration-300 ease-in-out" style="max-height: 0; opacity: 0;">
+                <div class="px-5 pb-5">
+                    <div class="flex items-center gap-3 mb-3 flex-wrap">
+                        <p class="text-sm text-slate-500">这里是「宁滥勿缺」兜住的信息。确认有价值就点<b class="text-emerald-700">「⬆ 升为一级」</b>，会永久记住。</p>
+                        <button onclick="promoteAllVisible()" class="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors">全部升为一级</button>
+                    </div>
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200">
+                                    <th class="w-[92px] min-w-[92px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">相关度</th>
+                                    <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
+                                    <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
+                                    <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">投标截止时间</th>
+                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                                    <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
+                                    <th class="w-[112px] min-w-[112px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extraTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div id="extraEmpty" class="hidden py-10 text-center text-slate-400 text-sm">当前没有被降级的信息</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="mt-8 text-center text-sm text-slate-400 fade-in" style="animation-delay: 0.5s">
             <p>数据来源：招标信息汇总.md | 生成时间：2026-07-28</p>
         </div>
     </div>
+
+    <!-- 侧边工具栏：悬浮开关 -->
+    <button id="drawerToggle" onclick="toggleDrawer()" title="打开工具栏"
+        class="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-slate-900 text-white pl-3 pr-2 py-4 rounded-l-xl shadow-lg hover:bg-slate-800 transition-colors flex flex-col items-center gap-1.5">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <span class="text-[11px] font-medium tracking-wider" style="writing-mode: vertical-rl;">工具栏</span>
+    </button>
+
+    <!-- 侧边工具栏：遮罩 -->
+    <div id="drawerMask" onclick="toggleDrawer()" class="fixed inset-0 z-40 bg-slate-900/30 hidden opacity-0"></div>
+
+    <!-- 侧边工具栏：抽屉 -->
+    <aside id="toolDrawer" class="closed fixed right-0 top-0 z-50 h-screen w-full max-w-[580px] bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <h2 class="text-lg font-bold text-slate-900">工具栏</h2>
+            <button onclick="toggleDrawer()" class="text-slate-400 hover:text-slate-700 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="px-5 pt-3 shrink-0">
+            <div class="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                <button onclick="switchDrawerTab('flow')" data-tab="flow" class="drawer-tab active flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors">采集流程</button>
+                <button onclick="switchDrawerTab('filter')" data-tab="filter" class="drawer-tab flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 hover:text-slate-900">筛选条件</button>
+            </div>
+        </div>
+
+        <!-- Tab: 采集流程 -->
+        <div id="drawerTabFlow" class="drawer-scroll flex-1 overflow-y-auto px-5 py-4">
+            <p class="text-sm text-slate-500 mb-4 leading-relaxed">
+                关键词在流程中用了<b class="text-slate-700">两次</b>：采集时作为查询条件推给对方服务器，筛选时再用来打相关度分。
+            </p>
+            <svg viewBox="0 0 480 512" class="w-full" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+                <defs>
+                    <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+                        <path d="M0,0 L7,3.2 L0,6.4 z" fill="#94a3b8"/>
+                    </marker>
+                    <marker id="arwUp" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+                        <path d="M0,0 L7,3.2 L0,6.4 z" fill="#059669"/>
+                    </marker>
+                </defs>
+
+                <!-- 1. 关键词库 -->
+                <rect x="118" y="6" width="244" height="46" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+                <text x="240" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#3730a3">COS 关键词库</text>
+                <text x="240" y="42" text-anchor="middle" font-size="11" fill="#6366f1">211 个 · 网页可编辑 · 改完下次采集即生效</text>
+
+                <line x1="240" y1="52" x2="240" y2="76" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+                <text x="248" y="69" font-size="10" fill="#64748b">作为查询条件推给对方服务器</text>
+
+                <!-- 2. 采集层 -->
+                <rect x="6" y="84" width="150" height="56" rx="9" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+                <text x="81" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">中车购爬虫</text>
+                <text x="81" y="119" text-anchor="middle" font-size="10" fill="#059669">直连 API · RSA 签名</text>
+                <text x="81" y="132" text-anchor="middle" font-size="10" fill="#059669">overTime = 权威截止</text>
+
+                <rect x="165" y="84" width="150" height="56" rx="9" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+                <text x="240" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">国铁爬虫</text>
+                <text x="240" y="119" text-anchor="middle" font-size="10" fill="#059669">直连 ES · mhId 轮换</text>
+                <text x="240" y="132" text-anchor="middle" font-size="10" fill="#059669">截止日期取自正文</text>
+
+                <rect x="324" y="84" width="150" height="56" rx="9" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+                <text x="399" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">WebSearch</text>
+                <text x="399" y="119" text-anchor="middle" font-size="10" fill="#b45309">仅覆盖未攻克平台</text>
+                <text x="399" y="132" text-anchor="middle" font-size="10" fill="#b45309">受索引延迟，召回低</text>
+
+                <line x1="81" y1="140" x2="81" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="399" y1="140" x2="399" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="81" y1="160" x2="399" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="240" y1="140" x2="240" y2="184" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+                <text x="248" y="177" font-size="10" fill="#64748b">原始候选（宁滥勿缺，全量入库）</text>
+
+                <!-- 3. 筛选层 -->
+                <rect x="6" y="192" width="468" height="118" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+                <text x="20" y="211" font-size="12" font-weight="700" fill="#0f172a">五层筛选</text>
+                <rect x="20" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="72" y="236" text-anchor="middle" font-size="10.5" fill="#334155">① 公告类型</text>
+                <rect x="132" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="184" y="236" text-anchor="middle" font-size="10.5" fill="#334155">② 排除词</text>
+                <rect x="244" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="296" y="236" text-anchor="middle" font-size="10.5" fill="#334155">③ 截止日期</text>
+                <rect x="356" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="408" y="236" text-anchor="middle" font-size="10.5" fill="#334155">④ 去重</text>
+                <rect x="20" y="252" width="440" height="46" rx="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+                <text x="34" y="270" font-size="11.5" font-weight="700" fill="#991b1b">⑤ 相关度评分（本工具栏可调）</text>
+                <text x="34" y="288" font-size="10" fill="#b91c1c">设备词 + 关键词 + 采购行为 + 单位属性 − 噪音扣分 → 0~100 分</text>
+
+                <line x1="240" y1="310" x2="240" y2="334" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+
+                <!-- 4. 分流 -->
+                <rect x="6" y="342" width="228" height="70" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+                <text x="120" y="364" text-anchor="middle" font-size="12.5" font-weight="700" fill="#065f46">一级看板</text>
+                <text x="120" y="381" text-anchor="middle" font-size="10.5" fill="#047857">得分 ≥ 阈值（默认 80）</text>
+                <text x="120" y="398" text-anchor="middle" font-size="10.5" fill="#047857">默认展开，重点跟进</text>
+
+                <rect x="246" y="342" width="228" height="70" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 3"/>
+                <text x="360" y="364" text-anchor="middle" font-size="12.5" font-weight="700" fill="#475569">多余信息</text>
+                <text x="360" y="381" text-anchor="middle" font-size="10.5" fill="#64748b">得分 &lt; 阈值</text>
+                <text x="360" y="398" text-anchor="middle" font-size="10.5" fill="#64748b">默认折叠，点开才可见</text>
+
+                <path d="M246,388 L236,388" stroke="#059669" stroke-width="0" fill="none"/>
+                <path d="M250,404 C238,420 20,420 12,404" stroke="#059669" stroke-width="1.8" fill="none" marker-end="url(#arwUp)"/>
+                <text x="240" y="434" text-anchor="middle" font-size="10.5" font-weight="600" fill="#059669">⬆ 一键升级为一级（人工覆盖，永久记住）</text>
+
+                <line x1="120" y1="412" x2="120" y2="448" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+
+                <!-- 5. 闭环 -->
+                <rect x="6" y="456" width="468" height="48" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+                <text x="240" y="476" text-anchor="middle" font-size="12" font-weight="700" fill="#3730a3">审阅状态回写 COS</text>
+                <text x="240" y="493" text-anchor="middle" font-size="10.5" fill="#6366f1">待查阅 / 已查阅 / 待跟进 · 已查阅满 30 天自动归档移除</text>
+            </svg>
+
+            <div class="mt-5 space-y-3 text-sm">
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-emerald-900 mb-1">为什么爬虫比搜索强两个数量级</p>
+                    <p class="text-emerald-800 leading-relaxed">爬虫把关键词推给对方数据库做全量匹配；WebSearch 只能搜到<b>已被搜索引擎索引</b>的内容，而招标公告发布 3 天内基本没被索引，等索引到往往已经过期。</p>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-slate-900 mb-1">截止日期策略必须分平台</p>
+                    <p class="text-slate-600 leading-relaxed">中车购 <code class="px-1 bg-white rounded border text-[12px]">overTime</code> 就是权威截止日期；国铁的 <code class="px-1 bg-white rounded border text-[12px]">latestDocumentSaleEndTime</code> 只是报名截止，真正投标截止在正文里、通常晚半个月。照搬会误杀。</p>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-slate-900 mb-1">爬虫运行在本地</p>
+                    <p class="text-slate-600 leading-relaxed">COS 只是仓库，不执行代码。爬虫由本机每日自动化任务触发，结果写入看板与 COS。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: 筛选条件 -->
+        <div id="drawerTabFilter" class="drawer-scroll flex-1 overflow-y-auto px-5 py-4 hidden">
+            <!-- 阈值 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <div class="flex items-baseline justify-between mb-1">
+                    <label class="text-sm font-semibold text-slate-900">一级门槛（相关度阈值）</label>
+                    <span class="text-2xl font-bold text-slate-900 count-up" id="cfgThresholdVal">80</span>
+                </div>
+                <input type="range" id="cfgThreshold" min="30" max="100" step="5" value="80" class="w-full mt-2">
+                <div class="flex justify-between text-[11px] text-slate-400 mt-1"><span>30 宽松</span><span>100 严苛</span></div>
+                <div id="cfgPreview" class="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg py-2">
+                        <p class="text-xl font-bold text-emerald-700" id="cfgPreviewPrimary">0</p>
+                        <p class="text-[11px] text-emerald-600">一级看板</p>
+                    </div>
+                    <div class="bg-slate-100 border border-slate-200 rounded-lg py-2">
+                        <p class="text-xl font-bold text-slate-600" id="cfgPreviewSecondary">0</p>
+                        <p class="text-[11px] text-slate-500">多余信息</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 权重 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <p class="text-sm font-semibold text-slate-900 mb-3">评分权重</p>
+                <div class="space-y-3" id="cfgWeights">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">设备属性词（是不是我们能做的设备）</span><span class="font-bold text-slate-900" id="wDeviceVal">55</span></div>
+                        <input type="range" id="wDevice" min="0" max="70" step="5" value="55" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">产品关键词命中</span><span class="font-bold text-slate-900" id="wKeywordVal">25</span></div>
+                        <input type="range" id="wKeyword" min="0" max="50" step="5" value="25" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">采购行为词（采购/招标/购置…）</span><span class="font-bold text-slate-900" id="wActionVal">10</span></div>
+                        <input type="range" id="wAction" min="0" max="30" step="5" value="10" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">单位属性（铁路/中车/地铁系统）</span><span class="font-bold text-slate-900" id="wUnitVal">10</span></div>
+                        <input type="range" id="wUnit" min="0" max="30" step="5" value="10" class="w-full">
+                    </div>
+                    <div class="pt-2 border-t border-slate-100">
+                        <div class="flex justify-between text-xs mb-1"><span class="text-red-600">噪音词扣分（房屋维修/绿化…）</span><span class="font-bold text-red-700" id="wNoiseVal">40</span></div>
+                        <input type="range" id="wNoise" min="0" max="80" step="5" value="40" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 词表 -->
+            <div class="space-y-3 mb-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-sm font-semibold text-slate-900">✅ 设备属性词 <span class="text-slate-400 font-normal" id="cntDevice">0</span></p>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mb-2">标题命中即认定为「我们能做的设备」，是进一级的主力分</p>
+                    <div id="listDevice" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputDevice" placeholder="添加设备词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('deviceWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <p class="text-sm font-semibold text-slate-900 mb-2">⚠️ 噪音词 <span class="text-slate-400 font-normal" id="cntNoise">0</span></p>
+                    <p class="text-[11px] text-slate-500 mb-2">蹭关键词但不是设备采购，命中则扣分降级（不丢弃）</p>
+                    <div id="listNoise" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputNoise" placeholder="添加噪音词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('noiseWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <p class="text-sm font-semibold text-slate-900 mb-2">🚫 排除词 <span class="text-slate-400 font-normal" id="cntExclude">0</span></p>
+                    <p class="text-[11px] text-slate-500 mb-2">命中直接判 0 分，铁定进多余信息区</p>
+                    <div id="listExclude" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputExclude" placeholder="添加排除词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('excludeWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人工覆盖 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <p class="text-sm font-semibold text-slate-900 mb-1">人工覆盖</p>
+                <p class="text-xs text-slate-500 mb-3">手动升级/降级的记录会永久生效，不受阈值和评分影响</p>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">升级 <b id="cntPromoted">0</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">降级 <b id="cntDemoted">0</b></span>
+                    <button onclick="clearOverrides()" class="ml-auto text-xs text-red-600 hover:text-red-800 underline">清空覆盖</button>
+                </div>
+            </div>
+
+            <div class="sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-200 flex items-center gap-3">
+                <button onclick="saveFilterConfig()" class="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">保存并应用</button>
+                <button onclick="resetFilterConfig()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition-colors">恢复默认</button>
+                <span id="cfgSaveMsg" class="hidden text-sm font-medium text-green-700 shrink-0">✅ 已保存</span>
+            </div>
+        </div>
+    </aside>
 
     <!-- Import Modal -->
     <div id="importModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -819,6 +1097,342 @@
         let manualTenders = [];
         let archivedTenders = [];
 
+        /* ==================== 相关度筛选（一级 / 多余信息） ==================== */
+
+        const DEFAULT_FILTER_CONFIG = {
+            threshold: 80,
+            weights: { device: 55, keyword: 25, action: 10, unit: 10 },
+            noisePenalty: 40,
+            deviceWords: [
+                '试验台', '实验台', '试验器', '试验机', '试验装置', '试验设备', '检测台', '测试台',
+                '架车机', '落轮机', '移车台', '转盘', '提升台', '升降平台', '作业平台', '检修平台',
+                '拆装机', '拆装小车', '压装机', '退卸机', '拔装机', '磨合机', '跑合', '嵌线',
+                '加热器', '加热装置', '清洗机', '烘干', '翻转架', '翻转台', '变位',
+                '工装', '组装胎', '胎具', '压爪', '试漏', '耐压', '气密', '放电机', '充电机',
+                '逆变器', '整形机', '成型机', '引车入库机', '选配系统', '动平衡'
+            ],
+            noiseWords: [
+                '房屋', '厂房', '土建', '装修', '改造工程', '绿化', '保洁', '物业', '消防',
+                '防雨棚', '屋面', '门窗', '道路', '管网', '给排水', '食堂', '宿舍', '办公楼',
+                '劳务', '保安', '印刷', '会议', '培训', '监理', '设计服务', '咨询服务', '审计',
+                '保险', '车辆租赁', '绿植', '空调安装', '通风空调', '照明', '弱电', '安防',
+                '物资处置', '废旧', '拍卖', '报废'
+            ],
+            excludeWords: ['驾校', '汽车驾驶', '客车租赁', '租车', '驾驶培训'],
+            promoted: [],
+            demoted: []
+        };
+
+        const ACTION_WORDS = ['采购', '招标', '购置', '询价', '竞争性谈判', '竞价', '比选', '磋商', '公开征集', '项修', '大修', '维保'];
+        const UNIT_WORDS = ['铁路', '铁道', '机务段', '车辆段', '机辆段', '工务段', '电务段', '客车段', '动车', '中车', '地铁', '轨道交通', '城轨', '车辆厂', '机车'];
+
+        let filterConfig = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+        let scoreCache = {};
+        let extraExpanded = false;
+
+        async function loadFilterConfig() {
+            let remote = null;
+            try {
+                const resp = await fetch(`${API_BASE}/api/filter-config`);
+                if (resp.ok) {
+                    const j = await resp.json();
+                    if (j && typeof j === 'object' && Object.keys(j).length) remote = j;
+                }
+            } catch (e) { /* 后端未部署该接口时静默降级 */ }
+            if (!remote) {
+                try {
+                    const local = localStorage.getItem('tenderFilterConfig');
+                    if (local) remote = JSON.parse(local);
+                } catch (e) { /* ignore */ }
+            }
+            const base = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+            if (remote) {
+                Object.keys(base).forEach(k => {
+                    if (remote[k] !== undefined && remote[k] !== null) base[k] = remote[k];
+                });
+                if (remote.weights) base.weights = { ...DEFAULT_FILTER_CONFIG.weights, ...remote.weights };
+            }
+            filterConfig = base;
+        }
+
+        async function persistFilterConfig() {
+            try { localStorage.setItem('tenderFilterConfig', JSON.stringify(filterConfig)); } catch (e) { /* ignore */ }
+            try {
+                await fetch(`${API_BASE}/api/filter-config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(filterConfig)
+                });
+            } catch (e) {
+                console.warn('筛选配置未能同步到 COS（本地已保存）', e);
+            }
+        }
+
+        /** 计算一条招标信息的相关度得分（0~100）与命中明细 */
+        function scoreTender(t, cfg) {
+            const text = `${t.name || ''} ${t.category || ''}`;
+            const cacheKey = `${t.id}|${cfg.threshold}|${cfg.noisePenalty}|${cfg.weights.device}|${cfg.weights.keyword}|${cfg.weights.action}|${cfg.weights.unit}|${cfg.deviceWords.length}|${cfg.noiseWords.length}|${cfg.excludeWords.length}`;
+            if (scoreCache[cacheKey]) return scoreCache[cacheKey];
+
+            const result = { score: 0, hits: [], noise: [], excluded: false };
+
+            const ex = cfg.excludeWords.filter(w => w && text.includes(w));
+            if (ex.length) {
+                result.excluded = true;
+                result.noise = ex;
+                scoreCache[cacheKey] = result;
+                return result;
+            }
+
+            const dev = cfg.deviceWords.filter(w => w && text.includes(w));
+            if (dev.length) {
+                result.score += dev.length >= 2 ? cfg.weights.device : Math.round(cfg.weights.device * 0.85);
+                result.hits.push(...dev.slice(0, 3));
+            }
+
+            const kw = (keywords || []).filter(w => w && w.length >= 2 && text.includes(w));
+            if (kw.length) {
+                result.score += kw.length >= 2 ? cfg.weights.keyword : Math.round(cfg.weights.keyword * 0.75);
+                kw.slice(0, 2).forEach(w => { if (!result.hits.includes(w)) result.hits.push(w); });
+            }
+
+            if (ACTION_WORDS.some(w => text.includes(w))) result.score += cfg.weights.action;
+
+            const unitText = `${t.unit || ''} ${t.name || ''}`;
+            if (UNIT_WORDS.some(w => unitText.includes(w))) result.score += cfg.weights.unit;
+
+            const noise = cfg.noiseWords.filter(w => w && text.includes(w));
+            if (noise.length) {
+                result.noise = noise.slice(0, 3);
+                result.score -= Math.min(noise.length, 2) * cfg.noisePenalty;
+            }
+
+            result.score = Math.max(0, Math.min(100, Math.round(result.score)));
+            scoreCache[cacheKey] = result;
+            return result;
+        }
+
+        /** 判定分级：'primary' 一级 | 'extra' 多余信息 */
+        function getTier(t, cfg) {
+            const id = String(t.id);
+            if ((cfg.promoted || []).map(String).includes(id)) return 'primary';
+            if ((cfg.demoted || []).map(String).includes(id)) return 'extra';
+            if (t.platform === '人工') return 'primary';
+            return scoreTender(t, cfg).score >= cfg.threshold ? 'primary' : 'extra';
+        }
+
+        function isPromoted(id) { return (filterConfig.promoted || []).map(String).includes(String(id)); }
+        function isDemoted(id) { return (filterConfig.demoted || []).map(String).includes(String(id)); }
+
+        function primaryTenders() { return tenders.filter(t => getTier(t, filterConfig) === 'primary'); }
+        function extraTenders() { return tenders.filter(t => getTier(t, filterConfig) === 'extra'); }
+
+        function scoreColor(score) {
+            if (score >= filterConfig.threshold) return { bar: '#059669', text: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' };
+            if (score >= filterConfig.threshold * 0.6) return { bar: '#d97706', text: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' };
+            return { bar: '#94a3b8', text: 'text-slate-500', bg: 'bg-slate-100 border-slate-200' };
+        }
+
+        /** 升级为一级 */
+        function promoteTender(id) {
+            id = String(id);
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            filterConfig.promoted.push(id);
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /** 降级到多余信息 */
+        function demoteTender(id) {
+            id = String(id);
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted.push(id);
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        function promoteAllVisible() {
+            const list = extraTenders();
+            if (!list.length) { alert('多余信息区当前没有记录。'); return; }
+            if (!confirm(`确定要把全部 ${list.length} 条多余信息升级为一级吗？`)) return;
+            const ids = list.map(t => String(t.id));
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => !ids.includes(x));
+            const promoted = new Set((filterConfig.promoted || []).map(String));
+            ids.forEach(i => promoted.add(i));
+            filterConfig.promoted = [...promoted];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        function clearOverrides() {
+            if (!confirm('确定要清空所有人工升级/降级记录吗？分级将完全回到评分判定。')) return;
+            filterConfig.promoted = [];
+            filterConfig.demoted = [];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /* ---------------- 侧边工具栏 ---------------- */
+
+        let drawerOpen = false;
+
+        function toggleDrawer() {
+            drawerOpen = !drawerOpen;
+            const drawer = document.getElementById('toolDrawer');
+            const mask = document.getElementById('drawerMask');
+            const toggle = document.getElementById('drawerToggle');
+            if (drawerOpen) {
+                drawer.classList.remove('closed');
+                mask.classList.remove('hidden');
+                requestAnimationFrame(() => mask.classList.remove('opacity-0'));
+                toggle.style.opacity = '0';
+                toggle.style.pointerEvents = 'none';
+                syncConfigUI();
+            } else {
+                drawer.classList.add('closed');
+                mask.classList.add('opacity-0');
+                setTimeout(() => mask.classList.add('hidden'), 350);
+                toggle.style.opacity = '1';
+                toggle.style.pointerEvents = 'auto';
+            }
+        }
+
+        function switchDrawerTab(tab) {
+            document.querySelectorAll('.drawer-tab').forEach(b => {
+                if (b.dataset.tab === tab) {
+                    b.classList.add('active');
+                    b.classList.remove('text-slate-600', 'hover:text-slate-900');
+                } else {
+                    b.classList.remove('active');
+                    b.classList.add('text-slate-600', 'hover:text-slate-900');
+                }
+            });
+            document.getElementById('drawerTabFlow').classList.toggle('hidden', tab !== 'flow');
+            document.getElementById('drawerTabFilter').classList.toggle('hidden', tab !== 'filter');
+            if (tab === 'filter') syncConfigUI();
+        }
+
+        const WORD_LIST_META = {
+            deviceWords: { list: 'listDevice', count: 'cntDevice', input: 'inputDevice', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+            noiseWords: { list: 'listNoise', count: 'cntNoise', input: 'inputNoise', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+            excludeWords: { list: 'listExclude', count: 'cntExclude', input: 'inputExclude', cls: 'bg-red-50 text-red-700 border border-red-200' }
+        };
+
+        function renderWordList(key) {
+            const meta = WORD_LIST_META[key];
+            const box = document.getElementById(meta.list);
+            if (!box) return;
+            const arr = filterConfig[key] || [];
+            document.getElementById(meta.count).textContent = arr.length;
+            box.innerHTML = arr.length ? '' : '<span class="text-xs text-slate-400">（空）</span>';
+            arr.forEach((w, i) => {
+                const chip = document.createElement('span');
+                chip.className = `word-chip ${meta.cls}`;
+                chip.innerHTML = `<span>${escapeHtml(w)}</span><button data-k="${key}" data-i="${i}" class="cfg-del opacity-60 hover:opacity-100 font-bold">✕</button>`;
+                box.appendChild(chip);
+            });
+        }
+
+        function addCfgWord(key) {
+            const meta = WORD_LIST_META[key];
+            const input = document.getElementById(meta.input);
+            const v = input.value.trim();
+            if (!v) return;
+            filterConfig[key] = filterConfig[key] || [];
+            if (filterConfig[key].includes(v)) { alert('该词已存在'); return; }
+            filterConfig[key].push(v);
+            input.value = '';
+            scoreCache = {};
+            renderWordList(key);
+            updateConfigPreview();
+        }
+
+        function syncConfigUI() {
+            document.getElementById('cfgThreshold').value = filterConfig.threshold;
+            document.getElementById('cfgThresholdVal').textContent = filterConfig.threshold;
+            const map = { wDevice: 'device', wKeyword: 'keyword', wAction: 'action', wUnit: 'unit' };
+            Object.entries(map).forEach(([el, k]) => {
+                document.getElementById(el).value = filterConfig.weights[k];
+                document.getElementById(el + 'Val').textContent = filterConfig.weights[k];
+            });
+            document.getElementById('wNoise').value = filterConfig.noisePenalty;
+            document.getElementById('wNoiseVal').textContent = filterConfig.noisePenalty;
+            Object.keys(WORD_LIST_META).forEach(renderWordList);
+            document.getElementById('cntPromoted').textContent = (filterConfig.promoted || []).length;
+            document.getElementById('cntDemoted').textContent = (filterConfig.demoted || []).length;
+            updateConfigPreview();
+        }
+
+        function readConfigFromUI() {
+            filterConfig.threshold = parseInt(document.getElementById('cfgThreshold').value, 10);
+            filterConfig.weights = {
+                device: parseInt(document.getElementById('wDevice').value, 10),
+                keyword: parseInt(document.getElementById('wKeyword').value, 10),
+                action: parseInt(document.getElementById('wAction').value, 10),
+                unit: parseInt(document.getElementById('wUnit').value, 10)
+            };
+            filterConfig.noisePenalty = parseInt(document.getElementById('wNoise').value, 10);
+            scoreCache = {};
+        }
+
+        function updateConfigPreview() {
+            const p = primaryTenders().length;
+            document.getElementById('cfgPreviewPrimary').textContent = p;
+            document.getElementById('cfgPreviewSecondary').textContent = tenders.length - p;
+        }
+
+        async function saveFilterConfig() {
+            readConfigFromUI();
+            await persistFilterConfig();
+            refreshAll();
+            const msg = document.getElementById('cfgSaveMsg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 2000);
+        }
+
+        function resetFilterConfig() {
+            if (!confirm('恢复默认会重置阈值、权重和全部词表（人工升降级记录保留），确定吗？')) return;
+            const keepPromoted = filterConfig.promoted || [];
+            const keepDemoted = filterConfig.demoted || [];
+            filterConfig = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+            filterConfig.promoted = keepPromoted;
+            filterConfig.demoted = keepDemoted;
+            scoreCache = {};
+            persistFilterConfig();
+            syncConfigUI();
+            refreshAll();
+        }
+
+        function toggleExtraPanel() {
+            extraExpanded = !extraExpanded;
+            setExtraPanelHeight(extraExpanded);
+        }
+
+        function setExtraPanelHeight(expanded) {
+            const body = document.getElementById('extraBody');
+            const arrow = document.getElementById('extraArrow');
+            if (!body || !arrow) return;
+            if (expanded) {
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.style.opacity = '1';
+                arrow.style.transform = 'rotate(90deg)';
+            } else {
+                body.style.maxHeight = '0';
+                body.style.opacity = '0';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function refreshAll() {
+            renderTable();
+            renderExtraTable();
+            updateStats();
+            updateConfigPreview();
+            if (window.Chart) initCharts();
+        }
+
         // API: load manual tenders
         async function loadManualTenders() {
             try {
@@ -1038,16 +1652,16 @@
         }
 
         function markAllAsRead() {
-            const currentTotal = tenders.length;
-            const pendingTotal = tenders.filter(t => getReviewState(t.id) === '待查阅').length;
+            const primary = primaryTenders();
+            const pendingTotal = primary.filter(t => getReviewState(t.id) === '待查阅').length;
             if (pendingTotal === 0) {
-                alert('当前没有待查阅的招标信息。');
+                alert('当前没有待查阅的一级招标信息。');
                 return;
             }
-            if (!confirm(`确定要将全部 ${pendingTotal} 条待查阅信息标记为“已查阅”吗？`)) {
+            if (!confirm(`确定要将一级看板中全部 ${pendingTotal} 条待查阅信息标记为“已查阅”吗？（多余信息区不受影响）`)) {
                 return;
             }
-            tenders.forEach(t => {
+            primary.forEach(t => {
                 if (getReviewState(t.id) === '待查阅') {
                     setReviewState(t.id, '已查阅');
                 }
@@ -1083,7 +1697,7 @@
             const emptyState = document.getElementById('emptyState');
             tbody.innerHTML = '';
 
-            const filtered = tenders.filter(t => {
+            const filtered = primaryTenders().filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1101,6 +1715,8 @@
                 emptyState.classList.add('hidden');
                 filtered.forEach((t, index) => {
                     const state = getReviewState(t.id);
+                    const sInfo = scoreTender(t, filterConfig);
+                    const sc = scoreColor(sInfo.score);
                     const rowHighlight = REVIEW_ROW_CLASS[state] || '';
                     const tr = document.createElement('tr');
                     tr.className = `table-row border-b border-slate-50 ${rowHighlight}`.trim();
@@ -1113,6 +1729,11 @@
                         </td>
                         <td class="col-name px-4 py-4">
                             <div class="table-text font-medium text-slate-900">${t.name}</div>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <span class="text-[11px] font-semibold ${sc.text}">相关度 ${sInfo.score}</span>
+                                ${isPromoted(t.id) ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">人工升级</span>' : ''}
+                                ${sInfo.hits.length ? `<span class="text-[11px] text-slate-400">· ${sInfo.hits.slice(0, 2).map(escapeHtml).join(' / ')}</span>` : ''}
+                            </div>
                         </td>
                         <td class="col-unit px-4 py-4">
                             <div class="table-text text-slate-600">${t.unit}</div>
@@ -1148,6 +1769,7 @@
                             <button data-id="${t.id}" class="state-btn table-text inline-flex items-center px-3 py-1.5 rounded-lg font-medium transition-colors ${REVIEW_BUTTON_CLASS[state]}">
                                 ${state === '待查阅' ? '🔴' : state === '已查阅' ? '🟢' : '🟣'} ${state}
                             </button>
+                            <button data-demote-id="${t.id}" class="demote-btn block mt-1.5 text-[11px] text-slate-400 hover:text-slate-700 underline transition-colors" title="移到多余信息区">⬇ 移到多余</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -1155,10 +1777,63 @@
             }
         }
 
+        function renderExtraTable() {
+            const tbody = document.getElementById('extraTableBody');
+            const empty = document.getElementById('extraEmpty');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const list = extraTenders().slice().sort((a, b) => {
+                const sa = scoreTender(a, filterConfig).score;
+                const sb = scoreTender(b, filterConfig).score;
+                if (sa !== sb) return sb - sa;
+                return new Date(b.publish) - new Date(a.publish);
+            });
+
+            document.getElementById('extraCount').textContent = list.length;
+            empty.classList.toggle('hidden', list.length > 0);
+
+            list.forEach(t => {
+                const info = scoreTender(t, filterConfig);
+                const sc = scoreColor(info.score);
+                const tr = document.createElement('tr');
+                tr.className = 'table-row';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 align-top">
+                        <div class="text-sm font-bold ${sc.text}">${info.excluded ? '—' : info.score}</div>
+                        <div class="score-bar mt-1"><i style="width:${info.excluded ? 0 : info.score}%;background:${sc.bar}"></i></div>
+                    </td>
+                    <td class="col-name px-4 py-3">
+                        <div class="text-sm text-slate-800">${t.name}</div>
+                        <div class="mt-1 text-[11px] text-slate-400">
+                            ${info.excluded ? `<span class="text-red-500">命中排除词：${info.noise.map(escapeHtml).join('、')}</span>`
+                                : (info.noise.length ? `<span class="text-amber-600">噪音扣分：${info.noise.map(escapeHtml).join('、')}</span>`
+                                : (info.hits.length ? `命中：${info.hits.slice(0, 2).map(escapeHtml).join(' / ')}` : '未命中设备属性词'))}
+                            ${isDemoted(t.id) ? ' · <span class="text-slate-500">人工降级</span>' : ''}
+                        </div>
+                    </td>
+                    <td class="col-unit px-4 py-3 text-sm text-slate-600">${t.unit || '—'}</td>
+                    <td class="col-deadline px-4 py-3 whitespace-nowrap text-sm text-slate-600">${t.deadline}</td>
+                    <td class="col-platform px-4 py-3 whitespace-nowrap">
+                        <span class="text-xs inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600 border border-slate-200">${t.platform}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-600 hover:text-blue-800">查看 ↗</a>` : '<span class="text-xs text-slate-300">—</span>'}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <button data-promote-id="${t.id}" class="promote-btn text-xs font-bold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors" title="升级为一级信息">⬆ 升为一级</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (extraExpanded) setTimeout(() => setExtraPanelHeight(true), 0);
+        }
+
         function updateStats() {
             const counts = { '高': 0, '中': 0, '低': 0 };
             const reviewCounts = { '待查阅': 0, '已查阅': 0, '待跟进': 0 };
-            tenders.forEach(t => {
+            primaryTenders().forEach(t => {
                 counts[t.priority]++;
                 const state = getReviewState(t.id);
                 reviewCounts[state] = (reviewCounts[state] || 0) + 1;
@@ -1171,7 +1846,13 @@
             animateCount('reviewedCount', reviewCounts['已查阅']);
             animateCount('followUpCount', reviewCounts['待跟进']);
             const totalEl = document.getElementById('totalCount');
-            if (totalEl) totalEl.textContent = tenders.length;
+            if (totalEl) totalEl.textContent = primaryTenders().length;
+            const extraEl = document.getElementById('headerExtraCount');
+            if (extraEl) {
+                const n = extraTenders().length;
+                extraEl.textContent = n;
+                extraEl.parentElement.classList.toggle('hidden', n === 0);
+            }
         }
 
         function animateCount(id, target) {
@@ -1207,12 +1888,21 @@
             renderTable();
         });
 
+        function jumpToExtra() {
+            if (!extraExpanded) toggleExtraPanel();
+            document.getElementById('extraToggle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         function initCharts() {
             const counts = { '高': 0, '中': 0, '低': 0 };
-            tenders.forEach(t => counts[t.priority]++);
+            primaryTenders().forEach(t => counts[t.priority]++);
+
+            // 重复调用时先销毁旧实例，避免 canvas 复用报错
+            if (window.__priorityChart) window.__priorityChart.destroy();
+            if (window.__categoryChart) window.__categoryChart.destroy();
 
             // Priority distribution doughnut chart
-            new Chart(document.getElementById('priorityChart'), {
+            window.__priorityChart = new Chart(document.getElementById('priorityChart'), {
                 type: 'doughnut',
                 data: {
                     labels: ['高优先级', '中优先级', '低优先级'],
@@ -1235,14 +1925,14 @@
 
             // Category TOP5 bar chart
             const categoryCounts = {};
-            tenders.forEach(t => {
+            primaryTenders().forEach(t => {
                 categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
             });
             const sortedCategories = Object.entries(categoryCounts)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 5);
 
-            new Chart(document.getElementById('categoryChart'), {
+            window.__categoryChart = new Chart(document.getElementById('categoryChart'), {
                 type: 'bar',
                 data: {
                     labels: sortedCategories.map(c => c[0]),
@@ -1269,7 +1959,7 @@
         }
 
         function exportTable() {
-            const filtered = tenders.filter(t => {
+            const filtered = primaryTenders().filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1281,11 +1971,14 @@
                 return matchesPriority && matchesSearch && matchesState;
             });
 
-            let csv = '\uFEFF优先级,项目名称,招标单位,产品类别,发布时间,投标截止时间,一手平台,审阅状态,公告链接\n';
-            filtered.forEach(t => {
+            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,投标截止时间,一手平台,审阅状态,公告链接\n';
+            const push = (t, tier) => {
                 const state = getReviewState(t.id);
-                csv += `${t.priority},"${t.name}","${t.unit}","${t.category}",${t.publish},"${t.deadline}","${t.platform}","${state}","${t.link}"\n`;
-            });
+                const s = scoreTender(t, filterConfig);
+                csv += `${tier},${s.excluded ? 0 : s.score},${t.priority},"${t.name}","${t.unit}","${t.category}",${t.publish},"${t.deadline}","${t.platform}","${state}","${t.link}"\n`;
+            };
+            filtered.forEach(t => push(t, '一级'));
+            extraTenders().forEach(t => push(t, '多余'));
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -1303,6 +1996,11 @@
                 updateStats();
                 return;
             }
+            const demoteBtn = e.target.closest('.demote-btn');
+            if (demoteBtn && demoteBtn.dataset.demoteId) {
+                demoteTender(demoteBtn.dataset.demoteId);
+                return;
+            }
             const delBtn = e.target.closest('.delete-btn');
             if (delBtn && delBtn.dataset.deleteId) {
                 if (confirm('确定要删除这条人工导入的记录吗？')) {
@@ -1317,11 +2015,52 @@
             }
         });
 
+        // 多余信息区：升级按钮
+        document.getElementById('extraTableBody').addEventListener('click', function (e) {
+            const btn = e.target.closest('.promote-btn');
+            if (btn && btn.dataset.promoteId) promoteTender(btn.dataset.promoteId);
+        });
+
+        // 工具栏：词表删除（事件委托）
+        document.getElementById('toolDrawer').addEventListener('click', function (e) {
+            const del = e.target.closest('.cfg-del');
+            if (!del) return;
+            const key = del.dataset.k;
+            const i = parseInt(del.dataset.i, 10);
+            if (!filterConfig[key] || isNaN(i)) return;
+            filterConfig[key].splice(i, 1);
+            scoreCache = {};
+            renderWordList(key);
+            updateConfigPreview();
+        });
+
+        // 工具栏：滑块实时预览
+        ['cfgThreshold', 'wDevice', 'wKeyword', 'wAction', 'wUnit', 'wNoise'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => {
+                const labelId = id === 'cfgThreshold' ? 'cfgThresholdVal' : id + 'Val';
+                const label = document.getElementById(labelId);
+                if (label) label.textContent = el.value;
+                readConfigFromUI();
+                updateConfigPreview();
+            });
+        });
+
+        // 工具栏：输入框回车添加
+        Object.entries(WORD_LIST_META).forEach(([key, meta]) => {
+            const input = document.getElementById(meta.input);
+            if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addCfgWord(key); });
+        });
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerOpen) toggleDrawer(); });
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             statuses = await loadStatuses();
             keywords = await loadKeywords();
             manualTenders = await loadManualTenders();
+            await loadFilterConfig();
 
             // 自动归档：已查阅满30天的招标信息从列表中移除
             const now = Date.now();
@@ -1344,9 +2083,12 @@
 
             mergeManualTenders();
             renderKeywords();
+            scoreCache = {};
             renderTable();
+            renderExtraTable();
             updateStats();
             initCharts();
+            syncConfigUI();
         });
     </script>
 </body>
