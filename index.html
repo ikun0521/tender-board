@@ -48,10 +48,10 @@
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                     <h1 class="text-3xl font-bold text-slate-900 tracking-tight">招标信息可视化看板</h1>
-                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">3302</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
+                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">831</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <span class="text-sm text-slate-500">最近更新：2026-07-31 16:53</span>
+                    <span class="text-sm text-slate-500">最近更新：2026-07-31 16:59</span>
                     <button onclick="markAllAsRead()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         全部标记已阅
@@ -556,7 +556,6 @@
         const API_BASE = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com';
 
         let tenders = [
-
     {
         "name": "新乡机务段“2026年内燃机车转向架构架故障修业务外包”采购项目 采购公告",
         "unit": "郑州局集团公司新乡机务段",
@@ -15004,19 +15003,7 @@
         "link": "https://cg.shenzhenmc.com/zzbgg/113066.jhtml",
         "platform": "深圳轨道交通",
         "priority": "中"
-    },
-    {
-        "id": 3303,
-        "name": "深圳市城市轨道交通15号线工程、西丽综合交通枢纽工程、25号线一期工程风机设备...",
-        "unit": "深圳市地铁集团有限公司",
-        "category": "未分类",
-        "publish": "2026-05-29 09:00",
-        "deadline": "2026-08-05 18:00",
-        "link": "https://cg.shenzhenmc.com/zzbgg/113776.jhtml",
-        "platform": "深圳轨道交通",
-        "priority": "中"
     }
-
         ];
         const priorityOrder = { '高': 0, '中': 1, '低': 2 };
         const priorityClass = { '高': 'priority-high', '中': 'priority-medium', '低': 'priority-low' };
