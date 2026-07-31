@@ -173,22 +173,6 @@
             </div>
         </div>
 
-        <!-- Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 fade-in" style="animation-delay: 0.2s">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h3 class="text-lg font-semibold text-slate-900 mb-4">优先级分布</h3>
-                <div class="h-64">
-                    <canvas id="priorityChart"></canvas>
-                </div>
-            </div>
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h3 class="text-lg font-semibold text-slate-900 mb-4">产品类别 TOP5</h3>
-                <div class="h-64">
-                    <canvas id="categoryChart"></canvas>
-                </div>
-            </div>
-        </div>
-
         <!-- Filters -->
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 mb-6 fade-in" style="animation-delay: 0.3s">
             <div class="flex flex-col lg:flex-row gap-4">
@@ -210,6 +194,8 @@
                     <button onclick="filterByState('待跟进')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-purple-50" data-state="待跟进">待跟进</button>
                 </div>
             </div>
+            <!-- 一手平台筛选：按看板中实际出现的平台动态生成 -->
+            <div id="platformFilterBar" class="flex flex-wrap gap-2 items-center mt-3 pt-3 border-t border-slate-100"></div>
         </div>
 
         <!-- Data Table -->
@@ -223,7 +209,7 @@
                             <th class="col-unit px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
                             <th class="col-category px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">产品类别</th>
                             <th class="col-publish px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">发布时间</th>
-                            <th class="col-deadline px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">投标截止时间</th>
+                            <th class="col-deadline px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
                             <th class="col-platform px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
                             <th class="col-link px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">公告链接</th>
                             <th class="w-[130px] min-w-[130px] px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">状态操作</th>
@@ -265,7 +251,7 @@
                                     <th class="w-[92px] min-w-[92px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">相关度</th>
                                     <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
                                     <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
-                                    <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">投标截止时间</th>
+                                    <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
                                     <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
                                     <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
                                     <th class="w-[112px] min-w-[112px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
@@ -14863,6 +14849,7 @@
         let currentFilter = 'all';
         let searchTerm = '';
         let currentStateFilter = 'all';
+        let currentPlatformFilter = 'all';
 
         // Review state management
         const REVIEW_STATES = ['待查阅', '已查阅', '待跟进'];
@@ -15330,7 +15317,7 @@
             renderExtraTable();
             updateStats();
             updateConfigPreview();
-            if (window.Chart) initCharts();
+            renderPlatformFilters();
         }
 
         // API: load manual tenders
@@ -15377,11 +15364,11 @@
             // Remove old manual tenders, then re-add
             tenders = tenders.filter(t => t.platform !== '人工');
             manualTenders.forEach(t => tenders.push(t));
-            // Re-sort
+            // Re-sort by relevance score (高 → 低), ties by publish date
             tenders.sort((a, b) => {
-                if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-                    return priorityOrder[a.priority] - priorityOrder[b.priority];
-                }
+                const sa = scoreTender(a, filterConfig).score;
+                const sb = scoreTender(b, filterConfig).score;
+                if (sa !== sb) return sb - sa;
                 return new Date(b.publish) - new Date(a.publish);
             });
         }
@@ -15426,7 +15413,7 @@
                 mergeManualTenders();
                 renderTable();
                 updateStats();
-                initCharts();
+                renderPlatformFilters();
                 // Clear form
                 ['importName', 'importUnit', 'importCategory', 'importDeadline'].forEach(id => document.getElementById(id).value = '');
                 closeImportModal();
@@ -15584,11 +15571,42 @@
             renderTable();
         }
 
-        // Sort by priority
-        tenders.sort((a, b) => {
-            if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-                return priorityOrder[a.priority] - priorityOrder[b.priority];
+        /** 平台筛选按钮：按看板中实际出现的平台动态生成（人工导入项归入"人工"） */
+        function renderPlatformFilters() {
+            const bar = document.getElementById('platformFilterBar');
+            if (!bar) return;
+            const platforms = ['all'];
+            for (const t of tenders) {
+                const p = (t.platform || '').trim();
+                if (p && !platforms.includes(p)) platforms.push(p);
             }
+            bar.innerHTML = platforms.map(p => {
+                const label = p === 'all' ? '全部平台' : p;
+                const active = currentPlatformFilter === p;
+                return `<button onclick="filterByPlatform('${String(p).replace(/'/g, "\\'")}')" class="platform-filter-btn px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${active ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-700 border-slate-300 hover:bg-slate-100'}" data-platform="${p}">${label}</button>`;
+            }).join('');
+        }
+
+        function filterByPlatform(platform) {
+            currentPlatformFilter = platform;
+            document.querySelectorAll('.platform-filter-btn').forEach(btn => {
+                if (btn.dataset.platform === platform) {
+                    btn.classList.add('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.remove('text-slate-700', 'border-slate-300');
+                } else {
+                    btn.classList.remove('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.add('text-slate-700', 'border-slate-300');
+                }
+            });
+            renderTable();
+            updateStats();
+        }
+
+        // Sort by relevance score (高 → 低), ties by publish date
+        tenders.sort((a, b) => {
+            const sa = scoreTender(a, filterConfig).score;
+            const sb = scoreTender(b, filterConfig).score;
+            if (sa !== sb) return sb - sa;
             return new Date(b.publish) - new Date(a.publish);
         });
 
@@ -15599,6 +15617,7 @@
 
             const filtered = primaryTenders().filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
+                const matchesPlatform = currentPlatformFilter === 'all' || t.platform === currentPlatformFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -15606,7 +15625,7 @@
                     t.platform.toLowerCase().includes(searchTerm.toLowerCase());
                 const state = getReviewState(t.id);
                 const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
-                return matchesPriority && matchesSearch && matchesState;
+                return matchesPriority && matchesPlatform && matchesSearch && matchesState;
             });
 
             if (filtered.length === 0) {
@@ -15800,74 +15819,10 @@
             document.getElementById('extraToggle').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
-        function initCharts() {
-            const counts = { '高': 0, '中': 0, '低': 0 };
-            primaryTenders().forEach(t => counts[t.priority]++);
-
-            // 重复调用时先销毁旧实例，避免 canvas 复用报错
-            if (window.__priorityChart) window.__priorityChart.destroy();
-            if (window.__categoryChart) window.__categoryChart.destroy();
-
-            // Priority distribution doughnut chart
-            window.__priorityChart = new Chart(document.getElementById('priorityChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['高优先级', '中优先级', '低优先级'],
-                    datasets: [{
-                        data: [counts['高'], counts['中'], counts['低']],
-                        backgroundColor: ['#dc2626', '#d97706', '#2563eb'],
-                        borderWidth: 0,
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { usePointStyle: true, padding: 20, font: { family: 'Noto Sans SC' } } }
-                    },
-                    cutout: '65%'
-                }
-            });
-
-            // Category TOP5 bar chart
-            const categoryCounts = {};
-            primaryTenders().forEach(t => {
-                categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
-            });
-            const sortedCategories = Object.entries(categoryCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 5);
-
-            window.__categoryChart = new Chart(document.getElementById('categoryChart'), {
-                type: 'bar',
-                data: {
-                    labels: sortedCategories.map(c => c[0]),
-                    datasets: [{
-                        label: '招标数量',
-                        data: sortedCategories.map(c => c[1]),
-                        backgroundColor: '#0f172a',
-                        borderRadius: 6,
-                        barThickness: 24
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: 'Noto Sans SC' } }, grid: { color: '#f1f5f9' } },
-                        x: { ticks: { font: { family: 'Noto Sans SC', size: 11 }, maxRotation: 30, minRotation: 30 }, grid: { display: false } }
-                    }
-                }
-            });
-        }
-
         function exportTable() {
             const filtered = primaryTenders().filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
+                const matchesPlatform = currentPlatformFilter === 'all' || t.platform === currentPlatformFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -15875,10 +15830,10 @@
                     t.platform.toLowerCase().includes(searchTerm.toLowerCase());
                 const state = getReviewState(t.id);
                 const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
-                return matchesPriority && matchesSearch && matchesState;
+                return matchesPriority && matchesPlatform && matchesSearch && matchesState;
             });
 
-            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,投标截止时间,一手平台,审阅状态,公告链接\n';
+            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,截止日期,一手平台,审阅状态,公告链接\n';
             const push = (t, tier) => {
                 const state = getReviewState(t.id);
                 const s = scoreTender(t, filterConfig);
@@ -15991,7 +15946,7 @@
             renderTable();
             renderExtraTable();
             updateStats();
-            initCharts();
+            renderPlatformFilters();
             syncConfigUI();
         });
     </script>
