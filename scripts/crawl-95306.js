@@ -51,7 +51,7 @@
  *   --detail             抓取详情正文并解析投标截止日期（强烈建议开启）
  *   --no-filter          不过滤已截止项目（默认仅保留 截止 >= 明天 与 待确认）
  *   --keep-auction       保留废旧物资处置/拍卖类（默认剔除）
- *   --days <n>           时间窗天数（全量通道按此拉取），默认 30
+ *   --days <n>           时间窗天数（全量通道按此拉取），默认 7；传 30 可抓近一个月
  *   --no-full            关闭全量兜底通道（仅关键词通道）
  *   --max-detail <n>     详情抓取上限（默认 1500，防止请求过多）
  *   --out <file>         输出 JSON 路径，默认 scripts/95306-candidates.json
@@ -167,7 +167,7 @@ function post(apiPath, params) {
 
 // ============ 接口封装 ============
 
-async function searchList(keyword, { noticeType = '', pageNum = 1 } = {}) {
+async function searchList(keyword, { noticeType = '', pageNum = 1, startDate = '', endDate = '' } = {}) {
   const res = await post('/elasticSearch/queryDataToEs', {
     projBidType: '',
     bidType: '',
@@ -175,8 +175,8 @@ async function searchList(keyword, { noticeType = '', pageNum = 1 } = {}) {
     wzType: '',
     title: keyword,
     disposalMethod: '',
-    startDate: '',
-    endDate: '',
+    startDate,
+    endDate,
     sortCondition: '0',
     pageNum: String(pageNum),
   });
@@ -208,36 +208,36 @@ async function getDetail(noticeId) {
 /**
  * 全量兜底通道：空标题 + 时间窗（近 days 天）拉取全部公告列表，
  * 本地用 isFullScanRelevant 粗筛，返回候选数组（不含详情）。
- * 翻页直到超出时间窗或页数上限。
+ * 服务端按 startDate/endDate 过滤时间，翻页到窗口边界（返回空页）即停，
+ * 不需要翻到 maxPages —— 速度快且不漏窗口内公告。
  */
-async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages = 800, verbose = false } = {}) {
+async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages = 3000, verbose = false } = {}) {
   const cutoff = todayPlusDays(-days);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
   const out = [];
   const seen = new Set();
   for (let p = 1; p <= maxPages; p++) {
     let list;
     try {
-      const r = await searchList('', { noticeType, pageNum: p });
+      const r = await searchList('', { noticeType, pageNum: p, startDate: cutoffStr, endDate: todayStr });
       list = r.list || [];
       if (verbose && p === 1) {
-        console.log(`[全量] 时间窗近${days}天, 类型${noticeType || 'all'} 总命中 ${r.totalCount}, 逐页拉取...`);
+        console.log(`[全量] 服务端时间窗 ${cutoffStr}~${todayStr}, 类型${noticeType || 'all'} 总命中 ${r.totalCount}, 逐页拉取...`);
       }
     } catch (e) {
       console.log(`[全量] 第${p}页失败: ${e.message}`);
       break;
     }
-    if (!list.length) break;
+    // 服务端已按时间窗过滤：返回空页说明已翻完窗口内全部
+    if (!list.length) {
+      if (verbose) console.log(`[全量] 第${p}页为空, 窗口内公告已拉完`);
+      break;
+    }
 
-    let pageFullyOld = true;
     for (const item of list) {
       const title = strip(item.notTitle);
       if (!title || seen.has(item.id)) continue;
-      const checkDate = parseDateLoose((item.checkTime || '').split(' ')[0]);
-      if (checkDate && checkDate < cutoff) {
-        // 时间倒序：本条已早于时间窗，后面的更早，结束整页扫描
-        pageFullyOld = false;
-        break;
-      }
       if (!isFullScanRelevant(title, keywords)) continue;
       seen.add(item.id);
       out.push({
@@ -255,7 +255,6 @@ async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages =
     }
     if (verbose && p % 50 === 0) console.log(`       ...第${p}页 累计${out.length}条`);
     await sleep(REQUEST_INTERVAL);
-    if (!pageFullyOld) break; // 本页出现早于时间窗的条目 → 停止
   }
   return out;
 }
@@ -468,7 +467,7 @@ async function main() {
   const withDetail = hasFlag('detail');
   const noFilter = hasFlag('no-filter');
   const verbose = hasFlag('verbose');
-  const daysLimit = parseInt(getArg('days', '30'), 10) || 0;
+  const daysLimit = parseInt(getArg('days', '7'), 10) || 0;
   const outFile = path.resolve(ROOT, getArg('out', 'scripts/95306-candidates.json'));
 
   const keywords = await loadKeywords();
