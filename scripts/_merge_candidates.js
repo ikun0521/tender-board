@@ -104,6 +104,33 @@ for (const c of readJson('scripts/suzhou-metro-candidates.json')) {
   });
 }
 
+// ---- 深圳轨道交通 szmetro ----
+for (const c of readJson('scripts/szmetro-candidates.json')) {
+  const unit = (c.unit || '').trim();
+  const publish = (c.publish || '').trim();
+  const deadline = (c.deadline || '').trim();
+  const dlSource = (c.deadlineSource || '').trim();
+  let snip = '';
+  if (unit) snip += `采购人：${unit}。`;
+  if (publish) snip += `发布时间：${publish}。`;
+  if (deadline && deadline !== '待确认') snip += `截止：${deadline}。`;
+  else if (dlSource) snip += `截止：${dlSource}。`;
+  const url = c.url || c.link;
+  if (!url) continue;
+  out.push({
+    title: (c.name || c.title || '').trim(),
+    url,
+    snippet: snip,
+    keyword: c.keyword || '',
+    _src: 'szmetro',
+    // 结构化字段：同步时直接采用，作为权威来源（权重最高）
+    deadline,
+    unit,
+    publish,
+    platform: c.platform || '深圳轨道交通',
+  });
+}
+
 // ---- WebSearch 补充 ----
 for (const c of readJson('scripts/websearch-candidates.json')) {
   if (!c.url || !c.title) continue;
