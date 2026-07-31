@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * 合并爬虫候选(95306 / crrcgo)与 WebSearch 候选为 sync-tenders 可消费的 search-results.json。
- * 关键：sync-tenders 会重新 fetch 候选 URL 并抽取，但一手平台(95306/crrcgo)是 JS 渲染页，
+ * 合并爬虫候选(95306 / crrcgo / suzhou-metro)与 WebSearch 候选为 sync-tenders 可消费的 search-results.json。
+ * 关键：sync-tenders 会重新 fetch 候选 URL 并抽取，但一手平台(95306/crrcgo/suzhou-metro)是 JS 渲染页，
  * 取不到正文 → 退化为用 candidateTitle + snippet 抽取。因此把爬虫已得的
  * 采购人/发布时间/截止时间 编码进 snippet，保证抽取质量不丢失。
  */
@@ -76,6 +76,31 @@ for (const c of readJson('scripts/crrcgo-candidates.json')) {
     deadline,
     unit,
     publish,
+  });
+}
+
+// ---- 苏州轨道交通 suzhou-metro ----
+for (const c of readJson('scripts/suzhou-metro-candidates.json')) {
+  const unit = (c.unit || '').trim();
+  const publish = (c.publish || '').trim();
+  const deadline = (c.deadline || '').trim();
+  let snip = '';
+  if (unit) snip += `采购人：${unit}。`;
+  if (publish) snip += `发布时间：${publish}。`;
+  if (deadline && deadline !== '待确认') snip += `截止：${deadline}。`;
+  const url = c.url || c.link;
+  if (!url) continue;
+  out.push({
+    title: (c.name || c.title || '').trim(),
+    url,
+    snippet: snip,
+    keyword: c.keyword || '',
+    _src: 'suzhou-metro',
+    // 结构化字段：同步时直接采用，作为权威来源（权重最高）
+    deadline,
+    unit,
+    publish,
+    platform: c.platform || '苏州轨道交通',
   });
 }
 

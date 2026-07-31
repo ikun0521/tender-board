@@ -18,5 +18,5 @@ index_backup.html
 .workbuddy/tmp_*.json
 .workbuddy/tmp_*/
 scripts/*-candidates.json
-scripts/search-results-targeted.json
+scripts/search-results*.json
 .workbuddy/

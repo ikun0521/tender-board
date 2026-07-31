@@ -567,7 +567,7 @@ function buildInfoFromStructured(c) {
   if (!deadline || deadline === '待确认' || deadline === 'null') deadline = '待确认';
   const publish = (c.publish || '').trim() || new Date().toISOString().split('T')[0];
   const unit = (c.unit || '').trim();
-  const platform = detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url);
+  const platform = c.platform || detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url);
   const category = c.keyword || c.category || '未分类';
   return { name, unit, category, publish, deadline, link: c.url, platform };
 }
@@ -798,8 +798,8 @@ async function main() {
   for (const c of candidates) {
     if (!c.url) continue;
     let info;
-    // 95306 / crrcgo 爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
-    if ((c._src === '95306' || c._src === 'crrcgo') && (c.deadline || c.unit || c.publish)) {
+    // 95306 / crrcgo / suzhou-metro 一手平台爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
+    if ((c._src === '95306' || c._src === 'crrcgo' || c._src === 'suzhou-metro') && (c.deadline || c.unit || c.publish)) {
       info = buildInfoFromStructured(c);
     } else {
       const pageHtml = await fetchPageText(c.url);
