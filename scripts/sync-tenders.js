@@ -557,6 +557,21 @@ async function extractFromPage(html, url, keyword, candidateTitle, snippet = '')
   return { name, unit, category, publish, deadline, link: url, platform };
 }
 
+// 优先采用国铁(95306) / 中车购(crrcgo) 爬虫已得的结构化字段作为权威来源。
+// 不再重新抓取候选页并重抽，避免 JS 渲染页 / 反爬导致字段丢失或被错抽历史日期。
+// 仅当结构化字段缺失（如 WebSearch 候选）时才退化到 fetch + extractFromPage。
+function buildInfoFromStructured(c) {
+  const name = (c.title || '').trim();
+  if (!name) return null;
+  let deadline = (c.deadline || '').trim();
+  if (!deadline || deadline === '待确认' || deadline === 'null') deadline = '待确认';
+  const publish = (c.publish || '').trim() || new Date().toISOString().split('T')[0];
+  const unit = (c.unit || '').trim();
+  const platform = detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url);
+  const category = c.keyword || c.category || '未分类';
+  return { name, unit, category, publish, deadline, link: c.url, platform };
+}
+
 function isFirstHand(url) {
   try {
     const host = new URL(url).hostname;
@@ -782,9 +797,15 @@ async function main() {
   const newTenders = [];
   for (const c of candidates) {
     if (!c.url) continue;
-    const pageHtml = await fetchPageText(c.url);
-    if (!pageHtml) continue;
-    const info = await extractFromPage(pageHtml, c.url, c.keyword || c.category || '', c.title, c.snippet || '');
+    let info;
+    // 95306 / crrcgo 爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
+    if ((c._src === '95306' || c._src === 'crrcgo') && (c.deadline || c.unit || c.publish)) {
+      info = buildInfoFromStructured(c);
+    } else {
+      const pageHtml = await fetchPageText(c.url);
+      if (!pageHtml) continue;
+      info = await extractFromPage(pageHtml, c.url, c.keyword || c.category || '', c.title, c.snippet || '');
+    }
     if (!info || !info.name) continue;
     if (isExcluded(info.name + ' ' + (c.snippet || ''))) continue;
 
@@ -873,6 +894,7 @@ module.exports = {
   extractUnitByLabel,
   extractUnitFromTitle,
   assignPriority,
+  buildInfoFromStructured,
   isExcluded,
   normalizeName,
   detectPlatformByText,
