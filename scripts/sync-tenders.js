@@ -699,6 +699,23 @@ function computeExpiredReadDeletions(list, statuses) {
   return ids;
 }
 
+/**
+ * 计算需要自动删除的 id：发布时间早于当前 30 天（一个月）的信息。
+ * 与前端 applyPublishAutoDelete 规则一致，每日同步时从看板真实移除。
+ */
+function computeOldPublishDeletions(list) {
+  const now = Date.now();
+  const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+  const ids = [];
+  for (const t of list) {
+    if (!t.publish) continue;
+    const pub = new Date(t.publish);
+    if (isNaN(pub.getTime())) continue;
+    if (now - pub.getTime() > MONTH_MS) ids.push(t.id);
+  }
+  return ids;
+}
+
 // ---------- Git ----------
 
 function runGit(args) {
@@ -803,9 +820,15 @@ async function main() {
   const deleteIds = computeExpiredReadDeletions(existingTenders, statuses);
   log(`自动删除 已查阅且截止超3天: ${deleteIds.length} 条`);
 
-  let keptTenders = existingTenders.filter((t) => !archiveIds.includes(t.id) && !deleteIds.includes(t.id));
+  // 自动删除：发布时间早于 30 天
+  const oldPublishIds = computeOldPublishDeletions(existingTenders);
+  log(`自动删除 发布时间超30天: ${oldPublishIds.length} 条`);
 
-  if (!newTenders.length && !archiveIds.length && !deleteIds.length) {
+  let keptTenders = existingTenders.filter(
+    (t) => !archiveIds.includes(t.id) && !deleteIds.includes(t.id) && !oldPublishIds.includes(t.id)
+  );
+
+  if (!newTenders.length && !archiveIds.length && !deleteIds.length && !oldPublishIds.length) {
     log('无新增/归档，跳过文件更新与 Git 提交');
     log(`当前看板总数: ${existingTenders.length}`);
     return;

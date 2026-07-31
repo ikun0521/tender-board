@@ -10121,6 +10121,28 @@
             refreshAll();
         }
 
+        /** 自动规则：发布时间早于当前 30 天（一个月）的信息自动删除（记入 deletedIds 持久化） */
+        function applyPublishAutoDelete() {
+            const now = Date.now();
+            const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+            const deleted = new Set((filterConfig.deletedIds || []).map(String));
+            let changed = false;
+            for (const t of tenders) {
+                const id = String(t.id);
+                if (deleted.has(id) || !t.publish) continue;
+                const pub = new Date(t.publish);
+                if (isNaN(pub.getTime())) continue;
+                if (now - pub.getTime() > MONTH_MS) {
+                    deleted.add(id);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                filterConfig.deletedIds = [...deleted];
+                persistFilterConfig();
+            }
+        }
+
         /* ---------------- 侧边工具栏 ---------------- */
 
         let drawerOpen = false;
@@ -10910,6 +10932,9 @@
             keywords = await loadKeywords();
             manualTenders = await loadManualTenders();
             await loadFilterConfig();
+
+            // 自动规则：发布时间早于 30 天的信息删除
+            applyPublishAutoDelete();
 
             // 自动归档：已查阅满30天的招标信息从列表中移除
             const now = Date.now();
