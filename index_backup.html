@@ -1,0 +1,2581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>招标信息可视化看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans SC', sans-serif; }
+        .priority-high { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #991b1b; border: 1px solid #fca5a5; }
+        .priority-medium { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; border: 1px solid #fbbf24; }
+        .priority-low { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: #1e40af; border: 1px solid #93c5fd; }
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .table-row { transition: background-color 0.2s; }
+        .table-row:hover { background-color: #f8fafc; }
+        .fade-in { animation: fadeIn 0.6s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .count-up { font-variant-numeric: tabular-nums; }
+        .col-priority { width: 72px; min-width: 72px; }
+        .col-name { min-width: 320px; max-width: 420px; }
+        .col-unit { min-width: 240px; max-width: 340px; }
+        .col-category { width: 120px; min-width: 120px; }
+        .col-publish { width: 100px; min-width: 100px; }
+        .col-deadline { width: 160px; min-width: 160px; }
+        .col-platform { width: 150px; min-width: 150px; }
+        .col-link { width: 100px; min-width: 100px; }
+        .table-text { font-size: 0.9375rem; line-height: 1.5rem; }
+        /* ---- 侧边工具栏 ---- */
+        #toolDrawer { transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        #toolDrawer.closed { transform: translateX(100%); }
+        #drawerMask { transition: opacity 0.35s ease; }
+        .drawer-tab.active { background: #0f172a; color: #fff; }
+        .drawer-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+        .drawer-scroll::-webkit-scrollbar { width: 6px; }
+        .drawer-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .word-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 12px; line-height: 20px; }
+        .score-bar { height: 5px; border-radius: 3px; background: #e2e8f0; overflow: hidden; }
+        .score-bar > i { display: block; height: 100%; border-radius: 3px; }
+        input[type=range] { accent-color: #0f172a; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+    <div class="w-full min-h-screen px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8 fade-in">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">招标信息可视化看板</h1>
+                    <p class="mt-2 text-slate-500">按优先级从高到低排序 · 一级共 <span id="totalCount" class="font-semibold text-slate-700">52</span> 条招标信息<span class="hidden"> · 另有 <button onclick="jumpToExtra()" class="font-semibold text-slate-600 underline hover:text-slate-900"><span id="headerExtraCount">0</span> 条多余信息</button></span></p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-slate-500">最近更新：2026-07-31 11:18</span>
+                    <button onclick="markAllAsRead()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        全部标记已阅
+                    </button>
+                    <button onclick="exportTable()" class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        导出数据
+                    </button>
+                    <button onclick="openImportModal()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        人工导入
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keywords Management -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6 fade-in" style="animation-delay: 0.08s">
+            <button id="keywordsToggle" onclick="toggleKeywordsPanel()" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors rounded-2xl focus:outline-none">
+                <span class="text-lg font-semibold text-slate-900">📋 关键词管理（共 <span id="keywordsCount">0</span> 个）</span>
+                <span id="keywordsArrow" class="text-slate-500 transition-transform duration-300 transform">▶</span>
+            </button>
+            <div id="keywordsBody" class="overflow-hidden transition-all duration-300 ease-in-out" style="max-height: 0; opacity: 0;">
+                <div class="px-5 pb-5">
+                    <p class="text-sm text-slate-500 mb-3">用于下次获取招标信息的关键词</p>
+                    <div id="keywordsContainer" class="flex flex-wrap gap-2 mb-4">
+                        <!-- Keywords will be inserted by JS -->
+                    </div>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="keywordInput" placeholder="输入关键词..." class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all">
+                        <button onclick="addKeyword()" class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors">添加</button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="confirmKeywords()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">确认修改</button>
+                        <span id="keywordSyncMessage" class="hidden text-sm font-medium text-green-700">✅ 关键词已同步</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in" style="animation-delay: 0.1s">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">高优先级</p>
+                        <p class="text-3xl font-bold text-red-600 mt-1 count-up" id="highCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">需重点关注与跟进</p>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">中优先级</p>
+                        <p class="text-3xl font-bold text-amber-600 mt-1 count-up" id="mediumCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">持续跟踪评估</p>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">低优先级</p>
+                        <p class="text-3xl font-bold text-blue-600 mt-1 count-up" id="lowCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">常规关注即可</p>
+            </div>
+        </div>
+
+        <!-- Review Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in" style="animation-delay: 0.15s">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">待查阅</p>
+                        <p class="text-3xl font-bold text-red-600 mt-1 count-up" id="pendingCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                        <span class="text-xl">🔴</span>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">尚未查看的招标信息</p>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">已查阅</p>
+                        <p class="text-3xl font-bold text-green-600 mt-1 count-up" id="reviewedCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                        <span class="text-xl">🟢</span>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">已查看的招标信息</p>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-slate-500">待跟进</p>
+                        <p class="text-3xl font-bold text-purple-600 mt-1 count-up" id="followUpCount">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                        <span class="text-xl">🟣</span>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400 mt-3">需要重点跟进的项目</p>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 fade-in" style="animation-delay: 0.2s">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">优先级分布</h3>
+                <div class="h-64">
+                    <canvas id="priorityChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">产品类别 TOP5</h3>
+                <div class="h-64">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 mb-6 fade-in" style="animation-delay: 0.3s">
+            <div class="flex flex-col lg:flex-row gap-4">
+                <div class="flex-1">
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input type="text" id="searchInput" placeholder="搜索项目名称、招标单位、产品类别或一手平台..." class="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all">
+                    </div>
+                </div>
+                <div class="flex gap-2 flex-wrap items-center">
+                    <button onclick="filterByPriority('all')" class="filter-btn active px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-slate-900 text-white" data-priority="all">全部</button>
+                    <button onclick="filterByPriority('高')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-red-50" data-priority="高">高优先级</button>
+                    <button onclick="filterByPriority('中')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-amber-50" data-priority="中">中优先级</button>
+                    <button onclick="filterByPriority('低')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-blue-50" data-priority="低">低优先级</button>
+                    <span class="w-px h-6 bg-slate-300 mx-1"></span>
+                    <button onclick="filterByState('all')" class="state-filter-btn active px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-slate-900 text-white" data-state="all">全部状态</button>
+                    <button onclick="filterByState('待查阅')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-red-50" data-state="待查阅">待查阅</button>
+                    <button onclick="filterByState('已查阅')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-green-50" data-state="已查阅">已查阅</button>
+                    <button onclick="filterByState('待跟进')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-purple-50" data-state="待跟进">待跟进</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden fade-in" style="animation-delay: 0.4s">
+            <div class="overflow-x-auto">
+                <table class="w-full" id="tenderTable">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200">
+                            <th class="col-priority px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">优先级</th>
+                            <th class="col-name px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
+                            <th class="col-unit px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
+                            <th class="col-category px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">产品类别</th>
+                            <th class="col-publish px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">发布时间</th>
+                            <th class="col-deadline px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">投标截止时间</th>
+                            <th class="col-platform px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                            <th class="col-link px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">公告链接</th>
+                            <th class="w-[130px] min-w-[130px] px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">状态操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <!-- Rows will be inserted by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="hidden py-16 text-center">
+                <svg class="mx-auto w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <p class="mt-3 text-slate-500">未找到匹配的招标信息</p>
+            </div>
+        </div>
+
+        <!-- 二级：多余信息 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 mt-6 fade-in overflow-hidden" style="animation-delay: 0.45s">
+            <button id="extraToggle" onclick="toggleExtraPanel()" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors focus:outline-none">
+                <span class="flex items-center gap-3">
+                    <span class="text-lg font-semibold text-slate-700">🗂️ 多余信息</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        <span id="extraCount">0</span> 条
+                    </span>
+                    <span class="text-sm text-slate-400 hidden sm:inline">相关度低于门槛，已折叠收纳</span>
+                </span>
+                <span id="extraArrow" class="text-slate-500 transition-transform duration-300 transform">▶</span>
+            </button>
+            <div id="extraBody" class="overflow-hidden transition-all duration-300 ease-in-out" style="max-height: 0; opacity: 0;">
+                <div class="px-5 pb-5">
+                    <div class="flex items-center gap-3 mb-3 flex-wrap">
+                        <p class="text-sm text-slate-500">这里是「宁滥勿缺」兜住的信息。确认有价值就点<b class="text-emerald-700">「⬆ 升为一级」</b>，会永久记住。</p>
+                        <button onclick="promoteAllVisible()" class="ml-auto px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors">全部升为一级</button>
+                    </div>
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200">
+                                    <th class="w-[92px] min-w-[92px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">相关度</th>
+                                    <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
+                                    <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
+                                    <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">投标截止时间</th>
+                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                                    <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
+                                    <th class="w-[112px] min-w-[112px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extraTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div id="extraEmpty" class="hidden py-10 text-center text-slate-400 text-sm">当前没有被降级的信息</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center text-sm text-slate-400 fade-in" style="animation-delay: 0.5s">
+            <p>数据来源：招标信息汇总.md | 生成时间：2026-07-31</p>
+        </div>
+    </div>
+
+    <!-- 侧边工具栏：悬浮开关 -->
+    <button id="drawerToggle" onclick="toggleDrawer()" title="打开工具栏"
+        class="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-slate-900 text-white pl-3 pr-2 py-4 rounded-l-xl shadow-lg hover:bg-slate-800 transition-colors flex flex-col items-center gap-1.5">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <span class="text-[11px] font-medium tracking-wider" style="writing-mode: vertical-rl;">工具栏</span>
+    </button>
+
+    <!-- 侧边工具栏：遮罩 -->
+    <div id="drawerMask" onclick="toggleDrawer()" class="fixed inset-0 z-40 bg-slate-900/30 hidden opacity-0"></div>
+
+    <!-- 侧边工具栏：抽屉 -->
+    <aside id="toolDrawer" class="closed fixed right-0 top-0 z-50 h-screen w-full max-w-[580px] bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <h2 class="text-lg font-bold text-slate-900">工具栏</h2>
+            <button onclick="toggleDrawer()" class="text-slate-400 hover:text-slate-700 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="px-5 pt-3 shrink-0">
+            <div class="flex gap-1 p-1 bg-slate-100 rounded-lg">
+                <button onclick="switchDrawerTab('flow')" data-tab="flow" class="drawer-tab active flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors">采集流程</button>
+                <button onclick="switchDrawerTab('filter')" data-tab="filter" class="drawer-tab flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 hover:text-slate-900">筛选条件</button>
+            </div>
+        </div>
+
+        <!-- Tab: 采集流程 -->
+        <div id="drawerTabFlow" class="drawer-scroll flex-1 overflow-y-auto px-5 py-4">
+            <p class="text-sm text-slate-500 mb-4 leading-relaxed">
+                关键词在流程中用了<b class="text-slate-700">两次</b>：采集时作为查询条件推给对方服务器，筛选时再用来打相关度分。
+            </p>
+            <svg viewBox="0 0 480 512" class="w-full" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans SC, sans-serif">
+                <defs>
+                    <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+                        <path d="M0,0 L7,3.2 L0,6.4 z" fill="#94a3b8"/>
+                    </marker>
+                    <marker id="arwUp" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+                        <path d="M0,0 L7,3.2 L0,6.4 z" fill="#059669"/>
+                    </marker>
+                </defs>
+
+                <!-- 1. 关键词库 -->
+                <rect x="118" y="6" width="244" height="46" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+                <text x="240" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#3730a3">COS 关键词库</text>
+                <text x="240" y="42" text-anchor="middle" font-size="11" fill="#6366f1">211 个 · 网页可编辑 · 改完下次采集即生效</text>
+
+                <line x1="240" y1="52" x2="240" y2="76" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+                <text x="248" y="69" font-size="10" fill="#64748b">作为查询条件推给对方服务器</text>
+
+                <!-- 2. 采集层 -->
+                <rect x="6" y="84" width="150" height="56" rx="9" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+                <text x="81" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">中车购爬虫</text>
+                <text x="81" y="119" text-anchor="middle" font-size="10" fill="#059669">直连 API · RSA 签名</text>
+                <text x="81" y="132" text-anchor="middle" font-size="10" fill="#059669">overTime = 权威截止</text>
+
+                <rect x="165" y="84" width="150" height="56" rx="9" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+                <text x="240" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">国铁爬虫</text>
+                <text x="240" y="119" text-anchor="middle" font-size="10" fill="#059669">直连 ES · mhId 轮换</text>
+                <text x="240" y="132" text-anchor="middle" font-size="10" fill="#059669">截止日期取自正文</text>
+
+                <rect x="324" y="84" width="150" height="56" rx="9" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+                <text x="399" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#92400e">WebSearch</text>
+                <text x="399" y="119" text-anchor="middle" font-size="10" fill="#b45309">仅覆盖未攻克平台</text>
+                <text x="399" y="132" text-anchor="middle" font-size="10" fill="#b45309">受索引延迟，召回低</text>
+
+                <line x1="81" y1="140" x2="81" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="399" y1="140" x2="399" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="81" y1="160" x2="399" y2="160" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="240" y1="140" x2="240" y2="184" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+                <text x="248" y="177" font-size="10" fill="#64748b">原始候选（宁滥勿缺，全量入库）</text>
+
+                <!-- 3. 筛选层 -->
+                <rect x="6" y="192" width="468" height="118" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+                <text x="20" y="211" font-size="12" font-weight="700" fill="#0f172a">五层筛选</text>
+                <rect x="20" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="72" y="236" text-anchor="middle" font-size="10.5" fill="#334155">① 公告类型</text>
+                <rect x="132" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="184" y="236" text-anchor="middle" font-size="10.5" fill="#334155">② 排除词</text>
+                <rect x="244" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="296" y="236" text-anchor="middle" font-size="10.5" fill="#334155">③ 截止日期</text>
+                <rect x="356" y="220" width="104" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+                <text x="408" y="236" text-anchor="middle" font-size="10.5" fill="#334155">④ 去重</text>
+                <rect x="20" y="252" width="440" height="46" rx="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+                <text x="34" y="270" font-size="11.5" font-weight="700" fill="#991b1b">⑤ 相关度评分（本工具栏可调）</text>
+                <text x="34" y="288" font-size="10" fill="#b91c1c">设备词 + 关键词 + 采购行为 + 单位属性 − 噪音扣分 → 0~100 分</text>
+
+                <line x1="240" y1="310" x2="240" y2="334" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+
+                <!-- 4. 分流 -->
+                <rect x="6" y="342" width="228" height="70" rx="10" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+                <text x="120" y="364" text-anchor="middle" font-size="12.5" font-weight="700" fill="#065f46">一级看板</text>
+                <text x="120" y="381" text-anchor="middle" font-size="10.5" fill="#047857">得分 ≥ 阈值（默认 80）</text>
+                <text x="120" y="398" text-anchor="middle" font-size="10.5" fill="#047857">默认展开，重点跟进</text>
+
+                <rect x="246" y="342" width="228" height="70" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 3"/>
+                <text x="360" y="364" text-anchor="middle" font-size="12.5" font-weight="700" fill="#475569">多余信息</text>
+                <text x="360" y="381" text-anchor="middle" font-size="10.5" fill="#64748b">得分 &lt; 阈值</text>
+                <text x="360" y="398" text-anchor="middle" font-size="10.5" fill="#64748b">默认折叠，点开才可见</text>
+
+                <path d="M246,388 L236,388" stroke="#059669" stroke-width="0" fill="none"/>
+                <path d="M250,404 C238,420 20,420 12,404" stroke="#059669" stroke-width="1.8" fill="none" marker-end="url(#arwUp)"/>
+                <text x="240" y="434" text-anchor="middle" font-size="10.5" font-weight="600" fill="#059669">⬆ 一键升级为一级（人工覆盖，永久记住）</text>
+
+                <line x1="120" y1="412" x2="120" y2="448" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arw)"/>
+
+                <!-- 5. 闭环 -->
+                <rect x="6" y="456" width="468" height="48" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+                <text x="240" y="476" text-anchor="middle" font-size="12" font-weight="700" fill="#3730a3">审阅状态回写 COS</text>
+                <text x="240" y="493" text-anchor="middle" font-size="10.5" fill="#6366f1">待查阅 / 已查阅 / 待跟进 · 已查阅满 30 天自动归档移除</text>
+            </svg>
+
+            <div class="mt-5 space-y-3 text-sm">
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-emerald-900 mb-1">为什么爬虫比搜索强两个数量级</p>
+                    <p class="text-emerald-800 leading-relaxed">爬虫把关键词推给对方数据库做全量匹配；WebSearch 只能搜到<b>已被搜索引擎索引</b>的内容，而招标公告发布 3 天内基本没被索引，等索引到往往已经过期。</p>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-slate-900 mb-1">截止日期策略必须分平台</p>
+                    <p class="text-slate-600 leading-relaxed">中车购 <code class="px-1 bg-white rounded border text-[12px]">overTime</code> 就是权威截止日期；国铁的 <code class="px-1 bg-white rounded border text-[12px]">latestDocumentSaleEndTime</code> 只是报名截止，真正投标截止在正文里、通常晚半个月。照搬会误杀。</p>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <p class="font-semibold text-slate-900 mb-1">爬虫运行在本地</p>
+                    <p class="text-slate-600 leading-relaxed">COS 只是仓库，不执行代码。爬虫由本机每日自动化任务触发，结果写入看板与 COS。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: 筛选条件 -->
+        <div id="drawerTabFilter" class="drawer-scroll flex-1 overflow-y-auto px-5 py-4 hidden">
+            <!-- 阈值 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <div class="flex items-baseline justify-between mb-1">
+                    <label class="text-sm font-semibold text-slate-900">一级门槛（相关度阈值）</label>
+                    <span class="text-2xl font-bold text-slate-900 count-up" id="cfgThresholdVal">80</span>
+                </div>
+                <input type="range" id="cfgThreshold" min="30" max="100" step="5" value="80" class="w-full mt-2">
+                <div class="flex justify-between text-[11px] text-slate-400 mt-1"><span>30 宽松</span><span>100 严苛</span></div>
+                <div id="cfgPreview" class="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg py-2">
+                        <p class="text-xl font-bold text-emerald-700" id="cfgPreviewPrimary">0</p>
+                        <p class="text-[11px] text-emerald-600">一级看板</p>
+                    </div>
+                    <div class="bg-slate-100 border border-slate-200 rounded-lg py-2">
+                        <p class="text-xl font-bold text-slate-600" id="cfgPreviewSecondary">0</p>
+                        <p class="text-[11px] text-slate-500">多余信息</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 权重 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <p class="text-sm font-semibold text-slate-900 mb-3">评分权重</p>
+                <div class="space-y-3" id="cfgWeights">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">设备属性词（是不是我们能做的设备）</span><span class="font-bold text-slate-900" id="wDeviceVal">55</span></div>
+                        <input type="range" id="wDevice" min="0" max="70" step="5" value="55" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">产品关键词命中</span><span class="font-bold text-slate-900" id="wKeywordVal">25</span></div>
+                        <input type="range" id="wKeyword" min="0" max="50" step="5" value="25" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">采购行为词（采购/招标/购置…）</span><span class="font-bold text-slate-900" id="wActionVal">10</span></div>
+                        <input type="range" id="wAction" min="0" max="30" step="5" value="10" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">单位属性（铁路/中车/地铁系统）</span><span class="font-bold text-slate-900" id="wUnitVal">10</span></div>
+                        <input type="range" id="wUnit" min="0" max="30" step="5" value="10" class="w-full">
+                    </div>
+                    <div class="pt-2 border-t border-slate-100">
+                        <div class="flex justify-between text-xs mb-1"><span class="text-red-600">噪音词扣分（房屋维修/绿化…）</span><span class="font-bold text-red-700" id="wNoiseVal">40</span></div>
+                        <input type="range" id="wNoise" min="0" max="80" step="5" value="40" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 词表 -->
+            <div class="space-y-3 mb-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-sm font-semibold text-slate-900">✅ 设备属性词 <span class="text-slate-400 font-normal" id="cntDevice">0</span></p>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mb-2">标题命中即认定为「我们能做的设备」，是进一级的主力分</p>
+                    <div id="listDevice" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputDevice" placeholder="添加设备词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('deviceWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <p class="text-sm font-semibold text-slate-900 mb-2">⚠️ 噪音词 <span class="text-slate-400 font-normal" id="cntNoise">0</span></p>
+                    <p class="text-[11px] text-slate-500 mb-2">蹭关键词但不是设备采购，命中则扣分降级（不丢弃）</p>
+                    <div id="listNoise" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputNoise" placeholder="添加噪音词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('noiseWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <p class="text-sm font-semibold text-slate-900 mb-2">🚫 排除词 <span class="text-slate-400 font-normal" id="cntExclude">0</span></p>
+                    <p class="text-[11px] text-slate-500 mb-2">命中直接判 0 分，铁定进多余信息区</p>
+                    <div id="listExclude" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputExclude" placeholder="添加排除词…" class="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-slate-900">
+                        <button onclick="addCfgWord('excludeWords')" class="px-3 py-1.5 bg-slate-900 text-white text-sm rounded-lg hover:bg-slate-800">添加</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人工覆盖 -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+                <p class="text-sm font-semibold text-slate-900 mb-1">人工覆盖</p>
+                <p class="text-xs text-slate-500 mb-3">手动升级/降级的记录会永久生效，不受阈值和评分影响</p>
+                <div class="flex items-center gap-2 text-sm flex-wrap">
+                    <span class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">升级 <b id="cntPromoted">0</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">降级 <b id="cntDemoted">0</b></span>
+                    <span class="px-2.5 py-1 rounded-lg bg-red-50 text-red-600 border border-red-200">删除 <b id="cntDeleted">0</b></span>
+                </div>
+                <div class="mt-2 flex items-center gap-3">
+                    <button onclick="clearOverrides()" class="text-xs text-red-600 hover:text-red-800 underline">清空覆盖</button>
+                    <button onclick="restoreDeleted()" class="text-xs text-slate-500 hover:text-slate-800 underline">恢复删除</button>
+                </div>
+            </div>
+
+            <div class="sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-200 flex items-center gap-3">
+                <button onclick="saveFilterConfig()" class="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm">保存并应用</button>
+                <button onclick="resetFilterConfig()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg transition-colors">恢复默认</button>
+                <span id="cfgSaveMsg" class="hidden text-sm font-medium text-green-700 shrink-0">✅ 已保存</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-slate-900">人工导入招标信息</h2>
+                <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">项目名称 <span class="text-red-500">*</span></label>
+                    <input type="text" id="importName" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="请输入项目名称">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">招标单位 <span class="text-red-500">*</span></label>
+                    <input type="text" id="importUnit" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="请输入招标单位">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">产品类别</label>
+                    <input type="text" id="importCategory" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="如：架车机、制动试验台">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">发布时间</label>
+                        <input type="date" id="importPublish" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">投标截止时间</label>
+                        <input type="datetime-local" id="importDeadline" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">优先级</label>
+                    <select id="importPriority" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        <option value="高">高</option>
+                        <option value="中" selected>中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+                <div class="bg-slate-50 rounded-lg px-4 py-3 text-sm text-slate-500">
+                    <p>一手平台将自动设为「人工」，无公告链接。</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <button onclick="closeImportModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">取消</button>
+                <button onclick="submitImport()" class="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">确认导入</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com';
+
+        let tenders = [
+    {
+        "name": "上海大机运用检修段2026年机械动力设备维保包件5电动架车机维保采购公告",
+        "unit": "上海大机运用检修段",
+        "publish": "2026-07-22",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=eed3f082eadd64d0878f1187cf02be36",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "单一来源",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-5-1-1",
+        "keyword": "架车机",
+        "deadlineSource": "none",
+        "snippet": "中国铁路上海局集团有限公司上海大型养路机械运用检修段（以下简称采购人）就上海大机运用检修2026年机械动力设备维保包件5电动架车机维保组织单一性谈判采购，经两轮公开招标，有效投标人不足三家，现邀请武汉华鼎铁道专用设备有限公司进行单一谈判。",
+        "id": 1,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团公司杭州北车辆段架车机基坑水位检测与高水位报警系统整修采购公告",
+        "unit": "上海局集团公司杭州北车辆段",
+        "publish": "2026-07-22",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=750464858e2573742650b24f83d63cc8",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "",
+        "projCode": "STGCHZBCLD-2026-0138-JT",
+        "keyword": "架车机",
+        "deadlineSource": "none",
+        "snippet": "一、采购条件（自行采购） 杭州北车辆段现就架车机基坑水位检测与高水位报警系统整修项目进行采购。本项目采购资金已落实，具备采购条件。 二、采购内容 具体内容详见采购公告附件。 三、报价人资格要求 3.1、经国家工商、税务机关登记",
+        "id": 2,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司上海大机运用检修段2026年机械动力设备维保包件5电动架车机维保采购公告",
+        "unit": "中国铁路上海局集团有限公司上海大型养路机械运用检修段",
+        "publish": "2026-07-15",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=1861cc4e3794985f59b5363ede8b0031",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-5-1",
+        "keyword": "架车机",
+        "deadlineSource": "none",
+        "snippet": "1.招标条件 上海局集团有限公司上海大机运用检修段现就2026年机械动力设备维保项目电动架车机维保（编号：STSDJ-SBK-2026-001-5-1)进行公开招标，本项目采购资金已落实，具备招标条件。 2.招标内容 项目内容为确保电动架车",
+        "id": 3,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司上海大机运用检修段2026年机械动力设备维保包件5电动架车机维保采购公告",
+        "unit": "中国铁路上海局集团有限公司上海大型养路机械运用检修段",
+        "publish": "2026-07-08",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=b245d73291932a3bcdb4ca4e820832f8",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-5",
+        "keyword": "架车机",
+        "deadlineSource": "none",
+        "snippet": "1.招标条件 上海局集团有限公司上海大机运用检修段现就2026年机械动力设备维保项目电动架车机维保（编号：STSDJ-SBK-2026-001-5)进行公开招标，本项目采购资金已落实，具备招标条件。 2.招标内容 项目内容为确保电动架车机使",
+        "id": 4,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海大机运用检修段2026年机械动力设备维保包件8移车台、电动落轮机维保采购公告",
+        "unit": "上海大机运用检修段",
+        "publish": "2026-07-22",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=44cbee906c596bedcd2e300bceb8c7df",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "单一来源",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-8-1-1",
+        "keyword": "落轮机",
+        "deadlineSource": "none",
+        "snippet": "中国铁路上海局集团有限公司上海大型养路机械运用检修段（以下简称采购人）就上海大机运用检修2026年机械动力设备维保包件8移车台、电动落轮机维保组织单一性谈判采购，经两轮公开招标，有效投标人不足三家，现邀请唐山百川工业服务有限公司进行单一谈判",
+        "id": 12,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司上海大机运用检修段2026年机械动力设备维保包件8移车台、电动落轮机维保采购公告",
+        "unit": "中国铁路上海局集团有限公司上海大型养路机械运用检修段",
+        "publish": "2026-07-15",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=a2050a5cdb04109cb2dc18c921009fb8",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-8-1",
+        "keyword": "落轮机",
+        "deadlineSource": "none",
+        "snippet": "1.招标条件 上海局集团有限公司上海大机运用检修段现就2026年机械动力设备维保项目移车台、电动落轮机维保（编号：STSDJ-SBK-2026-001-8-1)进行公开招标，本项目采购资金已落实，具备招标条件。 2.招标内容 项目内容为确保",
+        "id": 13,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司上海大机运用检修段2026年机械动力设备维保包件8移车台、电动落轮机维保采购公告",
+        "unit": "中国铁路上海局集团有限公司上海大型养路机械运用检修段",
+        "publish": "2026-07-08",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=fef71318ac14a293d37fcd21d37658ac",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "其他",
+        "projCode": "STSDJ-SBK-2026-001-8",
+        "keyword": "落轮机",
+        "deadlineSource": "none",
+        "snippet": "1.招标条件 上海局集团有限公司上海大机运用检修段现就2026年机械动力设备维保项目移车台、电动落轮机维保（编号：STSDJ-SBK-2026-001-8)进行公开招标，本项目采购资金已落实，具备招标条件。 2.招标内容 项目内容为确保1台",
+        "id": 14,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "中国铁路南昌局集团有限公司南昌局集团有限公司南昌南车辆段转向架落成专用吊具公开询价采购项目采购公告",
+        "unit": "中国铁路南昌局集团有限公司南昌局集团有限公司南昌南车辆段",
+        "publish": "2026-07-28",
+        "deadline": "2026-07-31 10:30",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=cc83819001c384de2a7263c9aabecd7e",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "询价采购",
+        "professional": "车辆",
+        "projCode": "2026-NC-WZ-cnlc2026039",
+        "keyword": "转向架",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "中国铁路南昌局集团有限公司南昌南车辆段转向架落成专用吊具公开询价采购项目公告 (项目编号: 2026-NC-WZ-cnlc2026039 ) &nb",
+        "id": 25,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "昆明局集团公司物资设备采购供应所关于集团公司车厢级主机转向架2监测卡等29项物资采购项目公告",
+        "unit": "昆明局集团公司物资设备采购供应所",
+        "publish": "2026-07-24",
+        "deadline": "2026-07-31 10:00",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=502a11f888058649ae01610bbff6c4d9",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "询价采购",
+        "professional": "车辆",
+        "projCode": "2026-KM-WZ-01-02A2221",
+        "keyword": "转向架",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "昆明局集团公司物资设备采购供应所关于集团公司车厢级主机转向架2监测卡等29项物资采购项目公告 (项目编号: 2026-KM-WZ-01-02A2221 ) &n",
+        "id": 26,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "新乡机务段“2026年内燃机车转向架构架故障修业务外包”采购项目 采购公告",
+        "unit": "郑州局集团公司新乡机务段",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-04 18:00",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=245738d3b64fe686b38274589b2e884f",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "机务",
+        "projCode": "2026-ZZ-FW-WZGS-2607268",
+        "keyword": "转向架",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "新乡机务段\"2026年内燃机车转向架构架故障修业务外包\"采购项目 采购公告 （项目编号：WZGS-ZZ-FW-WZGS-2607268） 1．采购条件 本采购项目新乡机务段\"2026年内燃机",
+        "id": 27,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团公司上海机车检修段转向架定位举升装置大修工程单一来源谈判公示",
+        "unit": "上海局集团公司上海机车检修段",
+        "publish": "2026-07-30",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=c724cad8133d1a1f7484347a410a6b96",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "单一来源",
+        "professional": "",
+        "projCode": "STGCHDJL-2026-1692-DY",
+        "keyword": "转向架",
+        "deadlineSource": "none",
+        "snippet": "上海局集团有限公司上海机车检修段转向架定位举升装置大修工程单一来源谈判公示 （项目发包编号：STGCHDJL-2026-1692-DY） 1.发包条件 本发包项目上海局集团有限公司上海机车检修段转向架定位举升装置大修工程已由中国铁路上海局",
+        "id": 28,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "内蒙古集通铁路（集团）有限责任公司大板综合维修段发布公开询价搬运平板车钢轨转向架服务项目公告采购公告",
+        "unit": "大板综合维修段",
+        "publish": "2026-07-28",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=6ef02e1f8af393d9d50b7493595434b6",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "询价采购",
+        "professional": "工务",
+        "projCode": "2026-HH-FW-DZHxlk-003",
+        "keyword": "转向架",
+        "deadlineSource": "none",
+        "snippet": "内蒙古集通铁路（集团）有限责任公司大板综合维修段发布公开询价搬运平板车钢轨转向架服务项目公告 编号:2026-HH-FW-DZHxlk-003 内蒙古集通铁路（集团）有限责任公司大板综合维修段，拟定于2025年7月份发布公开询价",
+        "id": 29,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团公司上海铁路机车车辆发展有限公司转向架检修库地坪整修竞争性谈判公告",
+        "unit": "上海铁路机车车辆发展有限公司",
+        "publish": "2026-07-21",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=b84eb23eb4d47c76deae8ba05e14f44e",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "",
+        "projCode": "STGCHDJL-2026-1525-JT",
+        "keyword": "转向架",
+        "deadlineSource": "none",
+        "snippet": "上海局集团公司上海铁路机车车辆发展有限公司转向架检修库地坪整修竞争性谈判公告 （项目发包编号：STGCHDJL-2026-1525-JT） 上海局集团公司上海铁路机车车辆发展有限公司转向架检修库地坪整修已具备招标条件，采用竞争性谈判的方式选",
+        "id": 30,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "成都动车段遴选动车组转向架无人跨运技术的应用研究项目合作方采购公告变更",
+        "unit": "成都动车段",
+        "publish": "2026-07-10",
+        "deadline": "null",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=5d8f592eef5f4c20b592a0f20be4fb10",
+        "platform": "国铁采购平台",
+        "noticeType": "变更公告",
+        "bidType": "谈判采购",
+        "professional": "车辆",
+        "projCode": "CDDCD-sbxxk-016",
+        "keyword": "转向架",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "公告中关于\"比选文件获取的方式\"做出以下修改。 1.凡有意参加本项目比选的单位，请自行下载《参选人报名表》。请于2026年7月14日16时00分前将信息填写完整并加盖单位鲜章后将《参选人报名表》扫描件及WORD电子档",
+        "id": 31,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司南京东车辆段两台微控120制动阀试验台大修采购公告",
+        "unit": "中国铁路上海局集团有限公司南京东车辆段",
+        "publish": "2026-07-07",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=8412d06b35488fc19d0f0e117c5275a4",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "车辆",
+        "projCode": "2026-SH-GC-NDL-3077-JT-2",
+        "keyword": "制动阀试验台",
+        "deadlineSource": "none",
+        "snippet": "上海局集团有限公司南京东车辆段两台微控120制动阀试验台大修竞争性谈判采购公告 项目编号：2026-SH-GC-NDL-3077-JT-2 一、采购条件 中国铁路上海局集团有限公司南京东车辆段现就采购项目进行公开竞争性谈判。本项目采购资金已",
+        "id": 53,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "贵阳车辆段后巢客整所DC600V地面电源大修工程施工比选公告",
+        "unit": "贵阳车辆段",
+        "publish": "2026-07-28",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=13620c665a5eb9b46e512270decb6c2d",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "",
+        "projCode": "DXNZBGY-LX-2026-207",
+        "keyword": "地面电源",
+        "deadlineSource": "none",
+        "snippet": "贵阳车辆段后巢客整所DC600V地面电源大修工程施工比选公告 比选编号：DXNZBGY-LX-2026-207 1.比选条件 本比选项目贵阳车辆段后巢客整所DC600V地面电源大修已由中国铁路成都局集团有限公司以《成都局集团",
+        "id": 196,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "中国铁路广州局集团有限公司长沙车辆段3台DC600V地面电源设备性能恢复整治采购公告",
+        "unit": "中国铁路广州局集团有限公司长沙车辆段",
+        "publish": "2026-07-28",
+        "deadline": "2026-08-02 12:00",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=9c493dc4cdc27faba1f56911ca338597",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "车辆",
+        "projCode": "2026-GZ-FW-CSCLDCG2026-0117",
+        "keyword": "地面电源",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "长沙车辆段3台DC600V地面电源设备性能恢复整治项目竞争性谈判采购公告 （项目编号：CSCLDCG2026-0117） 一、采购条件 本采购项目为长沙车辆段3台DC600V地面电源设备性能恢复整治，采购单位为长沙车辆段，项目资金已落实，具",
+        "id": 197,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "海口机辆轮渡段 三亚动车所检修作业平台整治项目采购公告采购公告",
+        "unit": "海口机辆轮渡段",
+        "publish": "2026-07-10",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=7bdd64e0f75cdb75d3ddb02cb4b5f71c",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "车辆",
+        "projCode": "HTJZZSC-2026-015",
+        "keyword": "检修作业平台",
+        "deadlineSource": "none",
+        "snippet": "一、招商人:海南铁路有限公司海口机辆轮渡段 二、招商项目名称：三亚动车所检修作业平台整治 三、大修项目基本要求： 1.整治内容必须满足《广州局集团公司铁路车辆专用设备检修维护规则》（广铁辆发〔2022〕65号）专用设备项修要求，设备性能和状",
+        "id": 254,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "中国铁路上海局集团有限公司上铁机辆公司上海动壹分公司自主修油压减振器油及油脂等采购公告",
+        "unit": "中国铁路上海局集团有限公司上铁机辆公司上海动壹分公司",
+        "publish": "2026-07-28",
+        "deadline": "2026-08-03 17:00",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=7f1670b05872abe86f1d3a8b1babfce4",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "其他",
+        "projCode": "2026-SH-WZ-STJL-SHDY-C007-JT-2",
+        "keyword": "油压减振器",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "中国铁路上海局集团有限公司上铁机辆公司上海动壹分公司自主修油压减振器油及油脂等采购公告 （项目编号：2026-SH-WZ-STJL-SHDY-C007-JT-2） 1. 采购条件 本采购项目上海局集团公司上铁",
+        "id": 268,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "郑渝高铁、京广高铁、徐兰高铁大机打磨砂轮起落部位钢轨修理项目采购公告",
+        "unit": "中国铁路郑州局集团有限公司郑州 高铁基础设施 段",
+        "publish": "2026-07-17",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=d2a3056c9ec4aef56b12314e1cc12a6b",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "",
+        "projCode": "B2026GTD048",
+        "keyword": "磨砂轮",
+        "deadlineSource": "none",
+        "snippet": "公开招标公告 一、项目概况： 招 标 人：中国铁路郑州局集团有限公司郑州高铁基础设施段 项目名称：郑渝高铁、京广高铁、徐兰高铁大机打磨砂轮起落部位钢轨修理项目 项目地点：段管内。 项目规模：郑渝高铁、京广高铁、徐兰高铁大机打磨",
+        "id": 314,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团公司上海机车检修段牵引电机综合试验台大修工程单一来源谈判公示",
+        "unit": "上海局集团公司上海机车检修段",
+        "publish": "2026-07-30",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=cd80271e3c22b23863a7510f5a1d7277",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "单一来源",
+        "professional": "",
+        "projCode": "STGCHDJL-2026-1693-DY",
+        "keyword": "试验台大修",
+        "deadlineSource": "none",
+        "snippet": "上海局集团有限公司上海机车检修段牵引电机综合试验台大修工程单一来源谈判公示 （项目发包编号：STGCHDJL-2026-1693-DY） 1.发包条件 本发包项目上海局集团有限公司上海机车检修段牵引电机综合试验台大修工程已由中国铁路上海局",
+        "id": 371,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团有限公司南京东车辆段两台微控空重车阀试验台大修采购公告",
+        "unit": "中国铁路上海局集团有限公司南京东车辆段",
+        "publish": "2026-07-07",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=c906ae405dfb8dab3f2b78ce539adc2f",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "车辆",
+        "projCode": "2026-SH-GC-NDL-3078-JT-1",
+        "keyword": "试验台大修",
+        "deadlineSource": "none",
+        "snippet": "上海局集团有限公司南京东车辆段两台微控空重车阀试验台大修竞争性谈判采购公告 项目编号：2026-SH-GC-NDL-3078-JT-1 一、采购条件 中国铁路上海局集团有限公司南京东车辆段现就采购项目进行公开竞争性谈判。本项目采购资金已落实",
+        "id": 372,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "上海局集团公司杭州北车辆段乔司检修车间120阀试验台大修采购公告",
+        "unit": "杭州北车辆段",
+        "publish": "2026-07-03",
+        "deadline": "待确认",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=e947e59525f39fcbd80761eb4f47f218",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "谈判采购",
+        "professional": "",
+        "projCode": "STGCHZBCLD-2026-0130-JT-02",
+        "keyword": "试验台大修",
+        "deadlineSource": "none",
+        "snippet": "一、采购条件（自行采购） 杭州北车辆段现就杭州北车辆段乔司检修车间120阀试验台大修项目进行采购。本项目采购资金已落实，具备采购条件。 二、采购内容 具体内容详见采购公告附件。 三、报价人资格要求",
+        "id": 373,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "中国铁路上海局集团有限公司上海机辆段新增微机控制三阀试验台项目招标公告",
+        "unit": "中国铁路上海局集团有限公司上海机辆段",
+        "publish": "2026-07-27",
+        "deadline": "2026-08-02 08:00",
+        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=cf9b68f023ae69d7889a33343c883189",
+        "platform": "国铁采购平台",
+        "noticeType": "项目公告",
+        "bidType": "招标",
+        "professional": "机务",
+        "projCode": "2026-SH-WZ-STSHJLD-2026-0113-GK",
+        "keyword": "试验台",
+        "deadlineSource": "latestDocumentSaleEndTime",
+        "snippet": "中国铁路上海局集团有限公司上海机辆段新增微机控制三阀试验台项目招标公告 （招标编号：2026-SH-WZ-STSHJLD-2026-0113-GK） 1. 招标条件 本招标项目上海机辆段新增微机控制三阀试验台",
+        "id": 496,
+        "priority": "中",
+        "category": "其他"
+    },
+    {
+        "name": "浦镇公司工程杭州市城市轨道交通18号线一期工程电动客车采购及维保委外服务（电动客车及工艺设备采购部分）机电总包-场段设备-非标设备-移动式架车机竞标式询比（2026GYLGLB02667）2026070228采购公告",
+        "unit": "中车南京浦镇车辆有限公司",
+        "category": "架车机",
+        "publish": "2026-07-28",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533392315716888576&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "浦镇公司工程杭州市城市轨道交通18号线一期工程电动客车采购及维保委外服务（电动客车及工艺设备采购部分）机电总包-场段设备-非标设备-移动式架车机竞标式询比（2026GYLGLB02667）2026070228采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533392315716888576&tabName=first",
+        "keyword": "架车机",
+        "id": 497,
+        "priority": "中"
+    },
+    {
+        "name": "中车贵阳-物资-弹簧半成品采购-铁路起重机-转向架-弹簧-一般性谈判-标准合同2026070012采购公告",
+        "unit": "中车贵阳车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-03",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535013112365506560&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "中车贵阳-物资-弹簧半成品采购-铁路起重机-转向架-弹簧-一般性谈判-标准合同2026070012采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535013112365506560&tabName=first",
+        "keyword": "转向架",
+        "id": 498,
+        "priority": "中"
+    },
+    {
+        "name": "常州公司智利车转向架弹簧2026070021采购公告",
+        "unit": "中车常州车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-04",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534820686413851648&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "常州公司智利车转向架弹簧2026070021采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534820686413851648&tabName=first",
+        "keyword": "转向架",
+        "id": 499,
+        "priority": "中"
+    },
+    {
+        "name": "中车贵阳-物资-交叉杆扣板采购-转向架-交叉支撑装置-交叉杆组成-交叉杆扣板-一般性谈判-标准合同2026070011采购公告",
+        "unit": "中车贵阳车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-03",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535017217230268416&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "中车贵阳-物资-交叉杆扣板采购-转向架-交叉支撑装置-交叉杆组成-交叉杆扣板-一般性谈判-标准合同2026070011采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535017217230268416&tabName=first",
+        "keyword": "转向架",
+        "id": 500,
+        "priority": "中"
+    },
+    {
+        "name": "轻量化转向架结构优化及强度仿真分析2026060147采购公告",
+        "unit": "中车唐山机车车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-04",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534788652576327680&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "轻量化转向架结构优化及强度仿真分析2026060147采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534788652576327680&tabName=first",
+        "keyword": "转向架",
+        "id": 501,
+        "priority": "中"
+    },
+    {
+        "name": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070017采购公告",
+        "unit": "中车唐山机车车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-05",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534816342842959872&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070017采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534816342842959872&tabName=first",
+        "keyword": "转向架",
+        "id": 502,
+        "priority": "中"
+    },
+    {
+        "name": "2026年下半年HXD2B机车转向架橡胶件-13082026070072采购公告",
+        "unit": "中车大同电力机车有限公司",
+        "category": "转向架",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-05",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534989639396156416&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "2026年下半年HXD2B机车转向架橡胶件-13082026070072采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534989639396156416&tabName=first",
+        "keyword": "转向架",
+        "id": 503,
+        "priority": "中"
+    },
+    {
+        "name": "一批转向架配件委外加工2026070041采购公告",
+        "unit": "中车山东机车车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-29",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534387115957996544&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "一批转向架配件委外加工2026070041采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534387115957996544&tabName=first",
+        "keyword": "转向架",
+        "id": 504,
+        "priority": "中"
+    },
+    {
+        "name": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070016采购公告",
+        "unit": "中车唐山机车车辆有限公司",
+        "category": "转向架",
+        "publish": "2026-07-29",
+        "deadline": "2026-08-05",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534972260314409984&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "唐山公司物资国铁配件中心费用转向架及其辅助-牵引传动耦合组件及其附件-传动耦合机构-联轴节（齿轮箱侧）2026070016采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534972260314409984&tabName=first",
+        "keyword": "转向架",
+        "id": 505,
+        "priority": "中"
+    },
+    {
+        "name": "新一代拖车（客车）转向架样机研制方案侧梁变位器等工装改造项目2026070009采购公告",
+        "unit": "中车青岛四方机车车辆股份有限公司",
+        "category": "转向架",
+        "publish": "2026-07-29",
+        "deadline": "2026-08-02",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534310495738030080&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "新一代拖车（客车）转向架样机研制方案侧梁变位器等工装改造项目2026070009采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534310495738030080&tabName=first",
+        "keyword": "转向架",
+        "id": 506,
+        "priority": "中"
+    },
+    {
+        "name": "单车试验器新增设备采购2026070006采购公告",
+        "unit": "中车长江车辆有限公司",
+        "category": "单车试验器",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-06",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534995774605942784&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "单车试验器新增设备采购2026070006采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534995774605942784&tabName=first",
+        "keyword": "单车试验器",
+        "id": 507,
+        "priority": "中"
+    },
+    {
+        "name": "戚墅堰公司司机控制器试验台2026070009采购公告",
+        "unit": "中车戚墅堰机车有限公司",
+        "category": "司机控制器试验台",
+        "publish": "2026-07-29",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533601296057940992&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "戚墅堰公司司机控制器试验台2026070009采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533601296057940992&tabName=first",
+        "keyword": "司机控制器试验台",
+        "id": 508,
+        "priority": "中"
+    },
+    {
+        "name": "城轨及转向架制造中心风缸安装垫块等小型工装采购2026070005采购公告",
+        "unit": "中车株洲电力机车有限公司",
+        "category": "小型工装",
+        "publish": "2026-07-29",
+        "deadline": "2026-08-01",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534129415814702080&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "城轨及转向架制造中心风缸安装垫块等小型工装采购2026070005采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534129415814702080&tabName=first",
+        "keyword": "小型工装",
+        "id": 509,
+        "priority": "中"
+    },
+    {
+        "name": "浦镇公司物资常规管理项目辅助电气-辅助电气其它电源模块及其它-常用低压转换组件-直流电源模块竞标式询比（2026GYLGLB03328）2026070194采购公告",
+        "unit": "中车南京浦镇车辆有限公司",
+        "category": "直流电源",
+        "publish": "2026-07-28",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533382962955840512&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "浦镇公司物资常规管理项目辅助电气-辅助电气其它电源模块及其它-常用低压转换组件-直流电源模块竞标式询比（2026GYLGLB03328）2026070194采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2533382962955840512&tabName=first",
+        "keyword": "直流电源",
+        "id": 510,
+        "priority": "中"
+    },
+    {
+        "name": "山东机辆公司风缸线风水压试验台改造设备采购2026070026采购公告",
+        "unit": "中车山东风电有限公司",
+        "category": "风水压试验台",
+        "publish": "2026-07-23",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529946447751821312&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "山东机辆公司风缸线风水压试验台改造设备采购2026070026采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529946447751821312&tabName=first",
+        "keyword": "风水压试验台",
+        "id": 511,
+        "priority": "中"
+    },
+    {
+        "name": "车体撞击试验台防护罩及护栏安全防护能力提升2026070054采购公告",
+        "unit": "中车青岛四方机车车辆股份有限公司",
+        "category": "试验台",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-03",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534956247636035584&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "车体撞击试验台防护罩及护栏安全防护能力提升2026070054采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534956247636035584&tabName=first",
+        "keyword": "试验台",
+        "id": 512,
+        "priority": "中"
+    },
+    {
+        "name": "2026-WX0057 热工室空调性能试验台维修2026070042采购公告",
+        "unit": "中铁检验认证（青岛）车辆检验站有限公司",
+        "category": "试验台",
+        "publish": "2026-07-30",
+        "deadline": "2026-08-03",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534946583615692800&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "2026-WX0057 热工室空调性能试验台维修2026070042采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534946583615692800&tabName=first",
+        "keyword": "试验台",
+        "id": 513,
+        "priority": "中"
+    },
+    {
+        "name": "四方所-复兴号动车组烟火探头自动化测试试验台-设备类-20260702竞标式询比2026070002采购公告",
+        "unit": "中车青岛四方车辆研究所有限公司",
+        "category": "试验台",
+        "publish": "2026-07-22",
+        "deadline": "2026-07-31",
+        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529066095009108992&tabName=first",
+        "platform": "中车购2.0平台",
+        "title": "四方所-复兴号动车组烟火探头自动化测试试验台-设备类-20260702竞标式询比2026070002采购公告",
+        "url": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2529066095009108992&tabName=first",
+        "keyword": "试验台",
+        "id": 514,
+        "priority": "中"
+    },
+            {
+                        "id": 518,
+                        "name": "浦镇公司物资常规管理项目转向架及其辅助-转向架附件-其它附件一般性询比（2026GYLGLB03166）2026070197采购公告",
+                        "unit": "中车南京浦镇车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-31",
+                        "deadline": "2026-08-04",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535578389385979904&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 520,
+                        "name": "SFC-2026-Z-0103转向架分厂标准动车组中小件加工压型2026070048采购公告",
+                        "unit": "青岛中车四方轨道车辆有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-31",
+                        "deadline": "2026-08-06",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2534880379991548928&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 523,
+                        "name": "郑州局集团公司洛阳机务段移动式架车机购置公开采购项目招标公告",
+                        "unit": "郑州局集团公司洛阳机务段",
+                        "category": "移动式架车机",
+                        "publish": "2026-07-10",
+                        "deadline": "2026-07-31 15:00",
+                        "link": "https://hn.zhiliaobiaoxun.com/article/105771201",
+                        "platform": "国铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 522,
+                        "name": "2026年试验台类设备维修项目-2026年试验台类设备维修项目采购公告",
+                        "unit": "",
+                        "category": "试验台",
+                        "publish": "2026-07-08",
+                        "deadline": "2026-08-04 10:00",
+                        "link": "https://www.sizebid.com/002/shanghai/shanghai/2026/61b2204fcbcccd55ac2eaf1190ef7ed5.html",
+                        "platform": "上海地铁采购平台",
+                        "priority": "高"
+            },
+            {
+                        "id": 519,
+                        "name": "A-A353阿根廷布宜诺斯艾利斯B线转向架管接件2026070934采购公告",
+                        "unit": "中车长春轨道客车股份有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-31",
+                        "deadline": "2026-08-11",
+                        "link": "https://www.crrcgo.cc/#/detail/purchaseDetail?id=2535036856756659200&tabName=first",
+                        "platform": "中车购2.0平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 524,
+                        "name": "中国铁路武汉局集团有限公司襄阳车辆段站修液压架车机购置项目招标公告",
+                        "unit": "中国铁路武汉局集团有限公司襄阳车辆段",
+                        "category": "液压架车机",
+                        "publish": "2026-07-20",
+                        "deadline": "2026-08-10",
+                        "link": "https://hbs.qianlima.com/zbcontent-615359010.html",
+                        "platform": "国铁采购平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 521,
+                        "name": "深铁运营2026年车辆架大修专项第17包备件(转向架系统)项目采购公告",
+                        "unit": "深圳市地铁集团有限公司",
+                        "category": "转向架",
+                        "publish": "2026-07-15",
+                        "deadline": "2026-08-10 10:00",
+                        "link": "https://cg.shenzhenmc.com/fcggggs/113366.jhtml",
+                        "platform": "深圳地铁智能招采管理平台",
+                        "priority": "中"
+            },
+            {
+                        "id": 515,
+                        "name": "转向架车间轮对荧光磁粉探伤机大修采购公告",
+                        "unit": "中国铁路北京局集团有限公司北京动车段",
+                        "category": "转向架",
+                        "publish": "2026-07-20",
+                        "deadline": "2026-07-20",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=fa3922590889a23a074f3ea4f9210781",
+                        "platform": "国铁采购平台",
+                        "priority": "低"
+            },
+            {
+                        "id": 516,
+                        "name": "沪昆线怀化机务转向架及轮对生产车间（9945F3097#2306m²）屋面漏水维修采购公告",
+                        "unit": "中国铁路广州局集团有限公司 怀化房建公寓段",
+                        "category": "转向架",
+                        "publish": "2026-07-16",
+                        "deadline": "2026-07-16",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=e9d20f8b0adcbf8e8310110e50c29c07",
+                        "platform": "国铁采购平台",
+                        "priority": "低"
+            },
+            {
+                        "id": 517,
+                        "name": "成都动车段遴选动车组转向架无人跨运技术的应用研究项目合作方比选公告",
+                        "unit": "成都动车段",
+                        "category": "转向架",
+                        "publish": "2026-07-10",
+                        "deadline": "2026-07-10",
+                        "link": "https://cg.95306.cn/baseinfor/notice/informationShow?id=0784e51a6df3e21a37e891c80b4970f9",
+                        "platform": "国铁采购平台",
+                        "priority": "低"
+            }
+        ];
+        const priorityOrder = { '高': 0, '中': 1, '低': 2 };
+        const priorityClass = { '高': 'priority-high', '中': 'priority-medium', '低': 'priority-low' };
+        const priorityLabel = { '高': '高', '中': '中', '低': '低' };
+        const priorityColor = { '高': '#dc2626', '中': '#d97706', '低': '#2563eb' };
+        const platformUrl = {
+            "E交易平台": "https://www.ejy365.com/",
+            "上海地铁采购平台": "https://eps.shmetro.com",
+            "上海宝华国际招标有限公司": "https://www.baohuabidding.com/",
+            "中国中车供应链管理电子平台": "http://ec.crrcgc.cc",
+            "中国中车采购电子商务平台": "http://cg.csrgc.com.cn",
+            "中国中铁采购电子商务平台": "http://www.crecgec.com",
+            "中国交建电子采购平台": "http://ec.ccccltd.cn/PMS/yhm1.shtml?id=0RQ5UTVHRsHlQXRsTvZSzilopmvdDStC9+34nGhR1Epy0g4Wwm5zAfIwoLN7xyxP",
+            "中国国际招标网": "http://home.ebnew.com/",
+            "中国招标投标公共服务平台": "https://www.cebpubservice.com",
+            "中国电力招标网": "https://www.dlzb.com/member/kefu.php?action=grade.php",
+            "中国航空发动机集团电子招标平台": "http://ebidding.aecc-mall.com/index.html",
+            "中国通号招标采购网": "http://thzb.crsc.cn/2406.html",
+            "中国采招网": "http://www.chinabiddingnet.com/user.php",
+            "中国采购与招标网": "https://www.chinabidding.cn/",
+            "中国铁物电子招投标平台": "https://www.bidding-crmsc.com.cn/",
+            "中国铁路兰州局物资采购平台": "http://61.178.243.183:8001/tbzlbs/page/gys_register/gys_login.jsp",
+            "中国铁路沈阳局集团有限公司": "https://www.sytljwzzb.com",
+            "中国铁路物资采购平台": "https://www.zgdlyzc.com",
+            "中拓招标网": "https://www.86ztbb.com",
+            "中招联合电子招标平台": "http://www.365trade.com.cn/",
+            "中车南京浦镇车辆有限公司": "https://esign.crrcpz.cc:8562/api/lk/HCQUEz",
+            "中车大连机车车辆有限公司": "https://srm.dloco.com/seeyon/index.jsp",
+            "中车山东机车车辆有限公司": "https://60.216.3.68:5777",
+            "中车株洲电力机车有限公司": "https://zjportal.crrcgc.cc:8888/ierp/login.html",
+            "中车购2.0平台": "https://www.crrcgo.cc",
+            "中车集团官网": "https://www.crrcgc.cc",
+            "中鼎物流智慧云平台": "https://lec.zdwlcloud.com/uc/app/portal/main.html",
+            "全国公共资源交易平台（广西南宁）": "http://ggzy.jgswj.gxzf.gov.cn/nnggzy/",
+            "剑鱼标讯": "https://www.jianyu360.cn",
+            "北京地铁电子商务采购平台": "http://www.bjmetro.com.cn/ecp/rfq",
+            "北京市公共资源交易中心": "https://ggzyfw.beijing.gov.cn",
+            "千里马招标网": "https://www.qianlima.com",
+            "华菱涟钢供应商自助管理系统": "http://beps.lysteel.com:8000/beps/login.jsp",
+            "南京地铁中央采购平台": "http://221.178.203.162:8889/",
+            "商智荟招采": "https://www.szhbuy.com",
+            "嘉兴市公共资源交易网": "https://jxszwsjb.jiaxing.gov.cn",
+            "四川省公共资源交易信息网": "https://ggzyjy.sc.gov.cn",
+            "国义招标": "http://www.ebidding.com/portal/",
+            "国家能源招标网": "http://www.shenhuabidding.com.cn/bidweb/",
+            "国能e购": "http://www.neep.shop",
+            "国铁采购平台": "https://cg.95306.cn",
+            "城轨采购网": "https://www.mtrmart.com/",
+            "大连市政府采购网": "http://ccgp.dl.gov.cn/dlweb/",
+            "天津轨道交通集团": "http://www.tjgdjt.com",
+            "安徽江淮汽车集团": "https://www.jac.com.cn",
+            "安防招标网": "https://www.anfangzhaobiao.com",
+            "山西公共资源交易市场主体库": "http://jyzt.sxzwfw.gov.cn/",
+            "山西公共资源数字交易中心": "http://prec.sxzwfw.gov.cn/",
+            "广东电子招标网": "http://www.gdebidding.com",
+            "广东省公共资源交易中心": "https://ggzyjy.gd.gov.cn",
+            "广州公共资源交易中心": "http://www.gzggzy.cn/html/index.html",
+            "广西南宁物资交易平台": "http://www.gxzbtb.cn/gxhy",
+            "建设招标网": "https://www.coopaa.com",
+            "成都西南铁路物资有限公司": "https://www.gtwzzb.com/",
+            "招商局集团电子招标采购交易平台": "https://dzzb.ciesco.com.cn/",
+            "招标网": "https://www.zhaobiao.cn",
+            "招标采购导航网": "https://www.ccpc360.com",
+            "新疆全流程电子招标交易平台": "https://xj.86ztbb.com",
+            "新疆公共资源交易网": "https://ggzy.xinjiang.gov.cn",
+            "无锡地铁采购平台": "https://scm.wxmetro.net",
+            "昆明铁路局物资采购平台": "http://www.ktwzb.com/index.jsp",
+            "易交在线电子招标投标交易平台": "http://www.sxyjcg.com/",
+            "标讯天下": "https://www.bidnews.cn",
+            "检测招标网": "https://www.jiancezhaobiao.com",
+            "武汉地铁运营采购网": "http://www.whrtyycg.com/",
+            "武汉地铁集团": "http://www.wuhanrt.com/public_forward.aspx",
+            "河南省机电设备国际招标有限公司": "http://www.hnjdgj.com/",
+            "河南省电子招标投标公共服务平台": "http://hnztbkhd.fgw.henan.gov.cn/",
+            "淮河能源采购平台": "http://www.hhnycg.com/index.html#/login",
+            "深圳地铁智能招采管理平台": "https://cg.shenzhenmc.com",
+            "深圳市国际招标有限公司": "http://new.sztc.com/",
+            "电力招标网": "https://www.dlzb.com",
+            "知了标讯": "https://www.zhiliaobiaoxun.cn",
+            "苏州轨道交通集团": "http://zzcg.sz-mtr.com/",
+            "西安铁路局物资采购平台": "http://www.xtcgpt.com",
+            "郑州地铁集团": "https://zzdt.going-link.com/oauth/",
+            "采招网": "https://www.bidcenter.com.cn/newsyezhu-179.html",
+            "陕西省公共资源交易中心": "http://www.sxggzyjy.cn/",
+            "青岛市公共资源交易电子服务系统": "https://ggzyjy.shandong.gov.cn",
+            "黑龙江公共资源交易网": "http://1.58.199.11:8605",
+            "其他": "#"
+};
+
+        let currentFilter = 'all';
+        let searchTerm = '';
+        let currentStateFilter = 'all';
+
+        // Review state management
+        const REVIEW_STATES = ['待查阅', '已查阅', '待跟进'];
+        const REVIEW_BUTTON_CLASS = {
+            '待查阅': 'bg-red-600 hover:bg-red-700 text-white',
+            '已查阅': 'bg-green-600 hover:bg-green-700 text-white',
+            '待跟进': 'bg-purple-600 hover:bg-purple-700 text-white'
+        };
+        const REVIEW_ROW_CLASS = {
+            '待查阅': 'bg-red-50',
+            '已查阅': '',
+            '待跟进': ''
+        };
+
+        // API functions
+        async function loadStatuses() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/statuses`);
+                return resp.ok ? await resp.json() : {};
+            } catch (e) {
+                console.warn('无法加载审阅状态', e);
+                return {};
+            }
+        }
+
+        async function saveStatuses(map) {
+            try {
+                await fetch(`${API_BASE}/api/statuses`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(map)
+                });
+            } catch (e) {
+                console.warn('无法保存审阅状态', e);
+            }
+        }
+
+        async function loadKeywords() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/keywords`);
+                return resp.ok ? await resp.json() : [];
+            } catch (e) {
+                console.warn('无法加载关键词', e);
+                return [];
+            }
+        }
+
+        async function saveKeywords(arr) {
+            try {
+                await fetch(`${API_BASE}/api/keywords`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(arr)
+                });
+            } catch (e) {
+                console.warn('无法保存关键词', e);
+            }
+        }
+
+        let statuses = {};
+        let keywords = [];
+        let manualTenders = [];
+        let archivedTenders = [];
+
+        /* ==================== 相关度筛选（一级 / 多余信息） ==================== */
+
+        const DEFAULT_FILTER_CONFIG = {
+            threshold: 80,
+            weights: { device: 55, keyword: 25, action: 10, unit: 10 },
+            noisePenalty: 40,
+            deviceWords: [
+                '试验台', '实验台', '试验器', '试验机', '试验装置', '试验设备', '检测台', '测试台',
+                '架车机', '落轮机', '移车台', '转盘', '提升台', '升降平台', '作业平台', '检修平台',
+                '拆装机', '拆装小车', '压装机', '退卸机', '拔装机', '磨合机', '跑合', '嵌线',
+                '加热器', '加热装置', '清洗机', '烘干', '翻转架', '翻转台', '变位',
+                '工装', '组装胎', '胎具', '压爪', '试漏', '耐压', '气密', '放电机', '充电机',
+                '逆变器', '整形机', '成型机', '引车入库机', '选配系统', '动平衡'
+            ],
+            noiseWords: [
+                '房屋', '厂房', '土建', '装修', '改造工程', '绿化', '保洁', '物业', '消防',
+                '防雨棚', '屋面', '门窗', '道路', '管网', '给排水', '食堂', '宿舍', '办公楼',
+                '劳务', '保安', '印刷', '会议', '培训', '监理', '设计服务', '咨询服务', '审计',
+                '保险', '车辆租赁', '绿植', '空调安装', '通风空调', '照明', '弱电', '安防',
+                '物资处置', '废旧', '拍卖', '报废'
+            ],
+            excludeWords: ['驾校', '汽车驾驶', '客车租赁', '租车', '驾驶培训'],
+            promoted: [],
+            demoted: [],
+            deletedIds: []
+        };
+
+        const ACTION_WORDS = ['采购', '招标', '购置', '询价', '竞争性谈判', '竞价', '比选', '磋商', '公开征集', '项修', '大修', '维保'];
+        const UNIT_WORDS = ['铁路', '铁道', '机务段', '车辆段', '机辆段', '工务段', '电务段', '客车段', '动车', '中车', '地铁', '轨道交通', '城轨', '车辆厂', '机车'];
+
+        let filterConfig = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+        let scoreCache = {};
+        let extraExpanded = false;
+
+        async function loadFilterConfig() {
+            let remote = null;
+            try {
+                const resp = await fetch(`${API_BASE}/api/filter-config`);
+                if (resp.ok) {
+                    const j = await resp.json();
+                    if (j && typeof j === 'object' && Object.keys(j).length) remote = j;
+                }
+            } catch (e) { /* 后端未部署该接口时静默降级 */ }
+            if (!remote) {
+                try {
+                    const local = localStorage.getItem('tenderFilterConfig');
+                    if (local) remote = JSON.parse(local);
+                } catch (e) { /* ignore */ }
+            }
+            const base = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+            if (remote) {
+                Object.keys(base).forEach(k => {
+                    if (remote[k] !== undefined && remote[k] !== null) base[k] = remote[k];
+                });
+                if (remote.weights) base.weights = { ...DEFAULT_FILTER_CONFIG.weights, ...remote.weights };
+            }
+            filterConfig = base;
+        }
+
+        async function persistFilterConfig() {
+            try { localStorage.setItem('tenderFilterConfig', JSON.stringify(filterConfig)); } catch (e) { /* ignore */ }
+            try {
+                await fetch(`${API_BASE}/api/filter-config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(filterConfig)
+                });
+            } catch (e) {
+                console.warn('筛选配置未能同步到 COS（本地已保存）', e);
+            }
+        }
+
+        /** 计算一条招标信息的相关度得分（0~100）与命中明细 */
+        function scoreTender(t, cfg) {
+            const text = `${t.name || ''} ${t.category || ''}`;
+            const cacheKey = `${t.id}|${cfg.threshold}|${cfg.noisePenalty}|${cfg.weights.device}|${cfg.weights.keyword}|${cfg.weights.action}|${cfg.weights.unit}|${cfg.deviceWords.length}|${cfg.noiseWords.length}|${cfg.excludeWords.length}`;
+            if (scoreCache[cacheKey]) return scoreCache[cacheKey];
+
+            const result = { score: 0, hits: [], noise: [], excluded: false };
+
+            const ex = cfg.excludeWords.filter(w => w && text.includes(w));
+            if (ex.length) {
+                result.excluded = true;
+                result.noise = ex;
+                scoreCache[cacheKey] = result;
+                return result;
+            }
+
+            const dev = cfg.deviceWords.filter(w => w && text.includes(w));
+            if (dev.length) {
+                result.score += dev.length >= 2 ? cfg.weights.device : Math.round(cfg.weights.device * 0.85);
+                result.hits.push(...dev.slice(0, 3));
+            }
+
+            const kw = (keywords || []).filter(w => w && w.length >= 2 && text.includes(w));
+            if (kw.length) {
+                result.score += kw.length >= 2 ? cfg.weights.keyword : Math.round(cfg.weights.keyword * 0.75);
+                kw.slice(0, 2).forEach(w => { if (!result.hits.includes(w)) result.hits.push(w); });
+            }
+
+            if (ACTION_WORDS.some(w => text.includes(w))) result.score += cfg.weights.action;
+
+            const unitText = `${t.unit || ''} ${t.name || ''}`;
+            if (UNIT_WORDS.some(w => unitText.includes(w))) result.score += cfg.weights.unit;
+
+            const noise = cfg.noiseWords.filter(w => w && text.includes(w));
+            if (noise.length) {
+                result.noise = noise.slice(0, 3);
+                result.score -= Math.min(noise.length, 2) * cfg.noisePenalty;
+            }
+
+            result.score = Math.max(0, Math.min(100, Math.round(result.score)));
+            scoreCache[cacheKey] = result;
+            return result;
+        }
+
+        /** 判定分级：'primary' 一级 | 'extra' 多余信息 */
+        function getTier(t, cfg) {
+            const id = String(t.id);
+            if ((cfg.promoted || []).map(String).includes(id)) return 'primary';
+            if ((cfg.demoted || []).map(String).includes(id)) return 'extra';
+            if (t.platform === '人工') return 'primary';
+            return scoreTender(t, cfg).score >= cfg.threshold ? 'primary' : 'extra';
+        }
+
+        function isPromoted(id) { return (filterConfig.promoted || []).map(String).includes(String(id)); }
+        function isDemoted(id) { return (filterConfig.demoted || []).map(String).includes(String(id)); }
+        function isDeleted(id) { return (filterConfig.deletedIds || []).map(String).includes(String(id)); }
+
+        function primaryTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'primary'); }
+        function extraTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'extra'); }
+
+        function scoreColor(score) {
+            if (score >= filterConfig.threshold) return { bar: '#059669', text: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' };
+            if (score >= filterConfig.threshold * 0.6) return { bar: '#d97706', text: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' };
+            return { bar: '#94a3b8', text: 'text-slate-500', bg: 'bg-slate-100 border-slate-200' };
+        }
+
+        /** 升级为一级 */
+        function promoteTender(id) {
+            id = String(id);
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            filterConfig.promoted.push(id);
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /** 降级到多余信息 */
+        function demoteTender(id) {
+            id = String(id);
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted.push(id);
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        function promoteAllVisible() {
+            const list = extraTenders();
+            if (!list.length) { alert('多余信息区当前没有记录。'); return; }
+            if (!confirm(`确定要把全部 ${list.length} 条多余信息升级为一级吗？`)) return;
+            const ids = list.map(t => String(t.id));
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => !ids.includes(x));
+            const promoted = new Set((filterConfig.promoted || []).map(String));
+            ids.forEach(i => promoted.add(i));
+            filterConfig.promoted = [...promoted];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        function clearOverrides() {
+            if (!confirm('确定要清空所有人工升级/降级记录吗？分级将完全回到评分判定。')) return;
+            filterConfig.promoted = [];
+            filterConfig.demoted = [];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /** 手动删除某条信息（软删除：记入 deletedIds，前端过滤不显示；人工导入项同时真删 COS） */
+        function deleteTender(id) {
+            id = String(id);
+            if (!confirm('确定要删除这条信息吗？删除后将从看板消失（可在工具栏「恢复删除」找回）。')) return;
+            filterConfig.deletedIds = (filterConfig.deletedIds || []).map(String).filter(x => x !== id);
+            filterConfig.deletedIds.push(id);
+            // 同步清掉该条的人工升降级覆盖，避免脏数据
+            filterConfig.promoted = (filterConfig.promoted || []).map(String).filter(x => x !== id);
+            filterConfig.demoted = (filterConfig.demoted || []).map(String).filter(x => x !== id);
+            persistFilterConfig();
+            // 若属于人工导入数据，同时从 COS 真删除
+            if (typeof manualTenders !== 'undefined' && Array.isArray(manualTenders) && manualTenders.some(t => String(t.id) === id)) {
+                deleteManualTender(id)
+                    .then(() => {
+                        manualTenders = manualTenders.filter(t => String(t.id) !== id);
+                        mergeManualTenders();
+                        refreshAll();
+                    })
+                    .catch(() => refreshAll());
+            } else {
+                refreshAll();
+            }
+        }
+
+        /** 恢复全部被软删除的信息 */
+        function restoreDeleted() {
+            if (!(filterConfig.deletedIds || []).length) { alert('当前没有已删除的信息。'); return; }
+            if (!confirm('确定要恢复所有已删除的信息吗？')) return;
+            filterConfig.deletedIds = [];
+            persistFilterConfig();
+            refreshAll();
+        }
+
+        /** 自动规则：发布时间早于当前 30 天（一个月）的信息自动删除（记入 deletedIds 持久化） */
+        function applyPublishAutoDelete() {
+            const now = Date.now();
+            const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+            const deleted = new Set((filterConfig.deletedIds || []).map(String));
+            let changed = false;
+            for (const t of tenders) {
+                const id = String(t.id);
+                if (deleted.has(id) || !t.publish) continue;
+                const pub = new Date(t.publish);
+                if (isNaN(pub.getTime())) continue;
+                if (now - pub.getTime() > MONTH_MS) {
+                    deleted.add(id);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                filterConfig.deletedIds = [...deleted];
+                persistFilterConfig();
+            }
+        }
+
+        /* ---------------- 侧边工具栏 ---------------- */
+
+        let drawerOpen = false;
+
+        function toggleDrawer() {
+            drawerOpen = !drawerOpen;
+            const drawer = document.getElementById('toolDrawer');
+            const mask = document.getElementById('drawerMask');
+            const toggle = document.getElementById('drawerToggle');
+            if (drawerOpen) {
+                drawer.classList.remove('closed');
+                mask.classList.remove('hidden');
+                requestAnimationFrame(() => mask.classList.remove('opacity-0'));
+                toggle.style.opacity = '0';
+                toggle.style.pointerEvents = 'none';
+                syncConfigUI();
+            } else {
+                drawer.classList.add('closed');
+                mask.classList.add('opacity-0');
+                setTimeout(() => mask.classList.add('hidden'), 350);
+                toggle.style.opacity = '1';
+                toggle.style.pointerEvents = 'auto';
+            }
+        }
+
+        function switchDrawerTab(tab) {
+            document.querySelectorAll('.drawer-tab').forEach(b => {
+                if (b.dataset.tab === tab) {
+                    b.classList.add('active');
+                    b.classList.remove('text-slate-600', 'hover:text-slate-900');
+                } else {
+                    b.classList.remove('active');
+                    b.classList.add('text-slate-600', 'hover:text-slate-900');
+                }
+            });
+            document.getElementById('drawerTabFlow').classList.toggle('hidden', tab !== 'flow');
+            document.getElementById('drawerTabFilter').classList.toggle('hidden', tab !== 'filter');
+            if (tab === 'filter') syncConfigUI();
+        }
+
+        const WORD_LIST_META = {
+            deviceWords: { list: 'listDevice', count: 'cntDevice', input: 'inputDevice', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+            noiseWords: { list: 'listNoise', count: 'cntNoise', input: 'inputNoise', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+            excludeWords: { list: 'listExclude', count: 'cntExclude', input: 'inputExclude', cls: 'bg-red-50 text-red-700 border border-red-200' }
+        };
+
+        function renderWordList(key) {
+            const meta = WORD_LIST_META[key];
+            const box = document.getElementById(meta.list);
+            if (!box) return;
+            const arr = filterConfig[key] || [];
+            document.getElementById(meta.count).textContent = arr.length;
+            box.innerHTML = arr.length ? '' : '<span class="text-xs text-slate-400">（空）</span>';
+            arr.forEach((w, i) => {
+                const chip = document.createElement('span');
+                chip.className = `word-chip ${meta.cls}`;
+                chip.innerHTML = `<span>${escapeHtml(w)}</span><button data-k="${key}" data-i="${i}" class="cfg-del opacity-60 hover:opacity-100 font-bold">✕</button>`;
+                box.appendChild(chip);
+            });
+        }
+
+        function addCfgWord(key) {
+            const meta = WORD_LIST_META[key];
+            const input = document.getElementById(meta.input);
+            const v = input.value.trim();
+            if (!v) return;
+            filterConfig[key] = filterConfig[key] || [];
+            if (filterConfig[key].includes(v)) { alert('该词已存在'); return; }
+            filterConfig[key].push(v);
+            input.value = '';
+            scoreCache = {};
+            renderWordList(key);
+            updateConfigPreview();
+        }
+
+        function syncConfigUI() {
+            document.getElementById('cfgThreshold').value = filterConfig.threshold;
+            document.getElementById('cfgThresholdVal').textContent = filterConfig.threshold;
+            const map = { wDevice: 'device', wKeyword: 'keyword', wAction: 'action', wUnit: 'unit' };
+            Object.entries(map).forEach(([el, k]) => {
+                document.getElementById(el).value = filterConfig.weights[k];
+                document.getElementById(el + 'Val').textContent = filterConfig.weights[k];
+            });
+            document.getElementById('wNoise').value = filterConfig.noisePenalty;
+            document.getElementById('wNoiseVal').textContent = filterConfig.noisePenalty;
+            Object.keys(WORD_LIST_META).forEach(renderWordList);
+            document.getElementById('cntPromoted').textContent = (filterConfig.promoted || []).length;
+            document.getElementById('cntDemoted').textContent = (filterConfig.demoted || []).length;
+            document.getElementById('cntDeleted').textContent = (filterConfig.deletedIds || []).length;
+            updateConfigPreview();
+        }
+
+        function readConfigFromUI() {
+            filterConfig.threshold = parseInt(document.getElementById('cfgThreshold').value, 10);
+            filterConfig.weights = {
+                device: parseInt(document.getElementById('wDevice').value, 10),
+                keyword: parseInt(document.getElementById('wKeyword').value, 10),
+                action: parseInt(document.getElementById('wAction').value, 10),
+                unit: parseInt(document.getElementById('wUnit').value, 10)
+            };
+            filterConfig.noisePenalty = parseInt(document.getElementById('wNoise').value, 10);
+            scoreCache = {};
+        }
+
+        function updateConfigPreview() {
+            const p = primaryTenders().length;
+            document.getElementById('cfgPreviewPrimary').textContent = p;
+            document.getElementById('cfgPreviewSecondary').textContent = tenders.length - p;
+        }
+
+        async function saveFilterConfig() {
+            readConfigFromUI();
+            await persistFilterConfig();
+            refreshAll();
+            const msg = document.getElementById('cfgSaveMsg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 2000);
+        }
+
+        function resetFilterConfig() {
+            if (!confirm('恢复默认会重置阈值、权重和全部词表（人工升降级记录保留），确定吗？')) return;
+            const keepPromoted = filterConfig.promoted || [];
+            const keepDemoted = filterConfig.demoted || [];
+            filterConfig = JSON.parse(JSON.stringify(DEFAULT_FILTER_CONFIG));
+            filterConfig.promoted = keepPromoted;
+            filterConfig.demoted = keepDemoted;
+            scoreCache = {};
+            persistFilterConfig();
+            syncConfigUI();
+            refreshAll();
+        }
+
+        function toggleExtraPanel() {
+            extraExpanded = !extraExpanded;
+            setExtraPanelHeight(extraExpanded);
+        }
+
+        function setExtraPanelHeight(expanded) {
+            const body = document.getElementById('extraBody');
+            const arrow = document.getElementById('extraArrow');
+            if (!body || !arrow) return;
+            if (expanded) {
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.style.opacity = '1';
+                arrow.style.transform = 'rotate(90deg)';
+            } else {
+                body.style.maxHeight = '0';
+                body.style.opacity = '0';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function refreshAll() {
+            renderTable();
+            renderExtraTable();
+            updateStats();
+            updateConfigPreview();
+            if (window.Chart) initCharts();
+        }
+
+        // API: load manual tenders
+        async function loadManualTenders() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/tenders`);
+                return resp.ok ? await resp.json() : [];
+            } catch (e) {
+                console.warn('无法加载人工导入的招标信息', e);
+                return [];
+            }
+        }
+
+        // API: save a new manual tender
+        async function saveManualTender(tender) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/tenders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(tender)
+                });
+                return resp.ok ? await resp.json() : [];
+            } catch (e) {
+                console.warn('无法保存人工导入的招标信息', e);
+                return null;
+            }
+        }
+
+        // API: delete a manual tender by id
+        async function deleteManualTender(id) {
+            try {
+                await fetch(`${API_BASE}/api/tenders`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+            } catch (e) {
+                console.warn('无法删除人工导入的招标信息', e);
+            }
+        }
+
+        // Merge manual tenders into the main array
+        function mergeManualTenders() {
+            // Remove old manual tenders, then re-add
+            tenders = tenders.filter(t => t.platform !== '人工');
+            manualTenders.forEach(t => tenders.push(t));
+            // Re-sort
+            tenders.sort((a, b) => {
+                if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                    return priorityOrder[a.priority] - priorityOrder[b.priority];
+                }
+                return new Date(b.publish) - new Date(a.publish);
+            });
+        }
+
+        // Import modal
+        function openImportModal() {
+            const modal = document.getElementById('importModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Set today's date as default
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('importPublish').value = today;
+        }
+
+        function closeImportModal() {
+            const modal = document.getElementById('importModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function submitImport() {
+            const name = document.getElementById('importName').value.trim();
+            const unit = document.getElementById('importUnit').value.trim();
+            if (!name || !unit) {
+                alert('项目名称和招标单位不能为空');
+                return;
+            }
+            const tender = {
+                id: 'M' + Date.now(),
+                name: name,
+                unit: unit,
+                category: document.getElementById('importCategory').value.trim() || '未分类',
+                publish: document.getElementById('importPublish').value || new Date().toISOString().split('T')[0],
+                deadline: (document.getElementById('importDeadline').value.trim().replace('T', ' ').replace(/:\d{2}$/, '') || '待确认'),
+                link: '',
+                platform: '人工',
+                priority: document.getElementById('importPriority').value
+            };
+            const result = await saveManualTender(tender);
+            if (result) {
+                manualTenders = result;
+                mergeManualTenders();
+                renderTable();
+                updateStats();
+                initCharts();
+                // Clear form
+                ['importName', 'importUnit', 'importCategory', 'importDeadline'].forEach(id => document.getElementById(id).value = '');
+                closeImportModal();
+            } else {
+                alert('导入失败，请重试');
+            }
+        }
+
+        function getReviewState(id) {
+            return statuses[id] || '待查阅';
+        }
+
+        function getReviewTime(id) {
+            return statuses[id + '_time'] || null;
+        }
+
+        function setReviewState(id, state) {
+            statuses[id] = state;
+            statuses[id + '_time'] = new Date().toISOString();
+            saveStatuses(statuses);
+        }
+
+        // Keyword management
+        let keywordsExpanded = false;
+
+        function updateKeywordsCount() {
+            const countEl = document.getElementById('keywordsCount');
+            if (countEl) countEl.textContent = keywords.length;
+        }
+
+        function setKeywordsPanelHeight(expanded) {
+            const body = document.getElementById('keywordsBody');
+            const arrow = document.getElementById('keywordsArrow');
+            if (!body || !arrow) return;
+            if (expanded) {
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.style.opacity = '1';
+                arrow.style.transform = 'rotate(90deg)';
+            } else {
+                body.style.maxHeight = '0';
+                body.style.opacity = '0';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function toggleKeywordsPanel() {
+            keywordsExpanded = !keywordsExpanded;
+            setKeywordsPanelHeight(keywordsExpanded);
+        }
+
+        function renderKeywords() {
+            const container = document.getElementById('keywordsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            updateKeywordsCount();
+            if (keywords.length === 0) {
+                container.innerHTML = '<span class="text-sm text-slate-400">暂无关键词</span>';
+                setKeywordsPanelHeight(keywordsExpanded);
+                return;
+            }
+            keywords.forEach((kw, index) => {
+                const tag = document.createElement('span');
+                tag.className = 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200';
+                tag.innerHTML = `
+                    <span>${escapeHtml(kw)}</span>
+                    <button onclick="removeKeyword(${index})" class="ml-1 p-0.5 hover:bg-blue-100 rounded-full transition-colors" title="删除">
+                        ✕
+                    </button>
+                `;
+                container.appendChild(tag);
+            });
+            // Recalculate height in case content changed
+            if (keywordsExpanded) {
+                setKeywordsPanelHeight(true);
+            }
+        }
+
+        function addKeyword() {
+            const input = document.getElementById('keywordInput');
+            const value = input.value.trim();
+            if (!value) return;
+            if (keywords.includes(value)) {
+                alert('该关键词已存在');
+                return;
+            }
+            keywords.push(value);
+            input.value = '';
+            renderKeywords();
+        }
+
+        function removeKeyword(index) {
+            if (index < 0 || index >= keywords.length) return;
+            keywords.splice(index, 1);
+            renderKeywords();
+        }
+
+        async function confirmKeywords() {
+            await saveKeywords(keywords);
+            showKeywordSyncMessage();
+        }
+
+        function showKeywordSyncMessage() {
+            const msg = document.getElementById('keywordSyncMessage');
+            if (!msg) return;
+            msg.classList.remove('hidden');
+            setTimeout(() => {
+                msg.classList.add('hidden');
+            }, 2000);
+        }
+
+        function cycleReviewState(id) {
+            const current = getReviewState(id);
+            const nextIndex = (REVIEW_STATES.indexOf(current) + 1) % REVIEW_STATES.length;
+            const nextState = REVIEW_STATES[nextIndex];
+            setReviewState(id, nextState);
+            return nextState;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function markAllAsRead() {
+            const primary = primaryTenders();
+            const pendingTotal = primary.filter(t => getReviewState(t.id) === '待查阅').length;
+            if (pendingTotal === 0) {
+                alert('当前没有待查阅的一级招标信息。');
+                return;
+            }
+            if (!confirm(`确定要将一级看板中全部 ${pendingTotal} 条待查阅信息标记为“已查阅”吗？（多余信息区不受影响）`)) {
+                return;
+            }
+            primary.forEach(t => {
+                if (getReviewState(t.id) === '待查阅') {
+                    setReviewState(t.id, '已查阅');
+                }
+            });
+            renderTable();
+            updateStats();
+        }
+
+        function filterByState(state) {
+            currentStateFilter = state;
+            document.querySelectorAll('.state-filter-btn').forEach(btn => {
+                if (btn.dataset.state === state) {
+                    btn.classList.add('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.remove('text-slate-700', 'border-slate-300', 'hover:bg-red-50', 'hover:bg-green-50', 'hover:bg-purple-50');
+                } else {
+                    btn.classList.remove('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.add('text-slate-700', 'border-slate-300');
+                }
+            });
+            renderTable();
+        }
+
+        // Sort by priority
+        tenders.sort((a, b) => {
+            if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                return priorityOrder[a.priority] - priorityOrder[b.priority];
+            }
+            return new Date(b.publish) - new Date(a.publish);
+        });
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            tbody.innerHTML = '';
+
+            const filtered = primaryTenders().filter(t => {
+                const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
+                const matchesSearch = searchTerm === '' || 
+                    t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.platform.toLowerCase().includes(searchTerm.toLowerCase());
+                const state = getReviewState(t.id);
+                const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
+                return matchesPriority && matchesSearch && matchesState;
+            });
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                filtered.forEach((t, index) => {
+                    const state = getReviewState(t.id);
+                    const sInfo = scoreTender(t, filterConfig);
+                    const sc = scoreColor(sInfo.score);
+                    const rowHighlight = REVIEW_ROW_CLASS[state] || '';
+                    const tr = document.createElement('tr');
+                    tr.className = `table-row border-b border-slate-50 ${rowHighlight}`.trim();
+                    tr.style.animation = `fadeIn 0.4s ease-out ${index * 0.03}s both`;
+                    tr.innerHTML = `
+                        <td class="col-priority px-4 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${priorityClass[t.priority]}">
+                                ${priorityLabel[t.priority]}
+                            </span>
+                        </td>
+                        <td class="col-name px-4 py-4">
+                            <div class="table-text font-medium text-slate-900">${t.name}</div>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <span class="text-[11px] font-semibold ${sc.text}">相关度 ${sInfo.score}</span>
+                                ${isPromoted(t.id) ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">人工升级</span>' : ''}
+                                ${sInfo.hits.length ? `<span class="text-[11px] text-slate-400">· ${sInfo.hits.slice(0, 2).map(escapeHtml).join(' / ')}</span>` : ''}
+                            </div>
+                        </td>
+                        <td class="col-unit px-4 py-4">
+                            <div class="table-text text-slate-600">${t.unit}</div>
+                        </td>
+                        <td class="col-category px-4 py-4 whitespace-nowrap">
+                            <span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-slate-100 text-slate-700">
+                                ${t.category}
+                            </span>
+                        </td>
+                        <td class="col-publish px-4 py-4 whitespace-nowrap table-text text-slate-600">${t.publish}</td>
+                        <td class="col-deadline px-4 py-4 whitespace-nowrap table-text text-slate-600">${t.deadline}</td>
+                        <td class="col-platform px-4 py-4 whitespace-nowrap">
+                            ${t.platform === '人工' 
+                                ? `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-amber-50 text-amber-700 border border-amber-200">${t.platform}</span>`
+                                : `<a href="${platformUrl[t.platform] || '#'}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 transition-colors">
+                                    ${t.platform}
+                                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                </a>`
+                            }
+                        </td>
+                        <td class="col-link px-4 py-4 whitespace-nowrap">
+                            <div>${t.link 
+                                ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                                    查看公告
+                                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                </a>`
+                                : '<span class="text-xs text-slate-300">—</span>'}</div>
+                            <button data-delete-id="${t.id}" class="delete-btn mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-md font-medium text-red-500 hover:bg-red-50 transition-colors border border-red-200 text-[11px]" title="删除此条信息">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                删除
+                            </button>
+                        </td>
+                        <td class="w-[130px] min-w-[130px] px-4 py-4 whitespace-nowrap">
+                            <button data-id="${t.id}" class="state-btn table-text inline-flex items-center px-3 py-1.5 rounded-lg font-medium transition-colors ${REVIEW_BUTTON_CLASS[state]}">
+                                ${state === '待查阅' ? '🔴' : state === '已查阅' ? '🟢' : '🟣'} ${state}
+                            </button>
+                            <button data-demote-id="${t.id}" class="demote-btn block mt-1.5 text-[11px] text-slate-400 hover:text-slate-700 underline transition-colors" title="移到多余信息区">⬇ 移到多余</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function renderExtraTable() {
+            const tbody = document.getElementById('extraTableBody');
+            const empty = document.getElementById('extraEmpty');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const list = extraTenders().slice().sort((a, b) => {
+                const sa = scoreTender(a, filterConfig).score;
+                const sb = scoreTender(b, filterConfig).score;
+                if (sa !== sb) return sb - sa;
+                return new Date(b.publish) - new Date(a.publish);
+            });
+
+            document.getElementById('extraCount').textContent = list.length;
+            empty.classList.toggle('hidden', list.length > 0);
+
+            list.forEach(t => {
+                const info = scoreTender(t, filterConfig);
+                const sc = scoreColor(info.score);
+                const tr = document.createElement('tr');
+                tr.className = 'table-row';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 align-top">
+                        <div class="text-sm font-bold ${sc.text}">${info.excluded ? '—' : info.score}</div>
+                        <div class="score-bar mt-1"><i style="width:${info.excluded ? 0 : info.score}%;background:${sc.bar}"></i></div>
+                    </td>
+                    <td class="col-name px-4 py-3">
+                        <div class="text-sm text-slate-800">${t.name}</div>
+                        <div class="mt-1 text-[11px] text-slate-400">
+                            ${info.excluded ? `<span class="text-red-500">命中排除词：${info.noise.map(escapeHtml).join('、')}</span>`
+                                : (info.noise.length ? `<span class="text-amber-600">噪音扣分：${info.noise.map(escapeHtml).join('、')}</span>`
+                                : (info.hits.length ? `命中：${info.hits.slice(0, 2).map(escapeHtml).join(' / ')}` : '未命中设备属性词'))}
+                            ${isDemoted(t.id) ? ' · <span class="text-slate-500">人工降级</span>' : ''}
+                        </div>
+                    </td>
+                    <td class="col-unit px-4 py-3 text-sm text-slate-600">${t.unit || '—'}</td>
+                    <td class="col-deadline px-4 py-3 whitespace-nowrap text-sm text-slate-600">${t.deadline}</td>
+                    <td class="col-platform px-4 py-3 whitespace-nowrap">
+                        <span class="text-xs inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600 border border-slate-200">${t.platform}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-600 hover:text-blue-800">查看 ↗</a>` : '<span class="text-xs text-slate-300">—</span>'}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <button data-promote-id="${t.id}" class="promote-btn text-xs font-bold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors" title="升级为一级信息">⬆ 升为一级</button>
+                            <button data-delete-id="${t.id}" class="delete-btn text-xs inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors" title="删除此条信息">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                删除
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (extraExpanded) setTimeout(() => setExtraPanelHeight(true), 0);
+        }
+
+        function updateStats() {
+            const counts = { '高': 0, '中': 0, '低': 0 };
+            const reviewCounts = { '待查阅': 0, '已查阅': 0, '待跟进': 0 };
+            primaryTenders().forEach(t => {
+                counts[t.priority]++;
+                const state = getReviewState(t.id);
+                reviewCounts[state] = (reviewCounts[state] || 0) + 1;
+            });
+            
+            animateCount('highCount', counts['高']);
+            animateCount('mediumCount', counts['中']);
+            animateCount('lowCount', counts['低']);
+            animateCount('pendingCount', reviewCounts['待查阅']);
+            animateCount('reviewedCount', reviewCounts['已查阅']);
+            animateCount('followUpCount', reviewCounts['待跟进']);
+            const totalEl = document.getElementById('totalCount');
+            if (totalEl) totalEl.textContent = primaryTenders().length;
+            const extraEl = document.getElementById('headerExtraCount');
+            if (extraEl) {
+                const n = extraTenders().length;
+                extraEl.textContent = n;
+                extraEl.parentElement.classList.toggle('hidden', n === 0);
+            }
+        }
+
+        function animateCount(id, target) {
+            const el = document.getElementById(id);
+            let current = 0;
+            const increment = target / 30;
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    current = target;
+                    clearInterval(timer);
+                }
+                el.textContent = Math.floor(current);
+            }, 20);
+        }
+
+        function filterByPriority(priority) {
+            currentFilter = priority;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.dataset.priority === priority) {
+                    btn.classList.add('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.remove('text-slate-700', 'border-slate-300', 'hover:bg-red-50', 'hover:bg-amber-50', 'hover:bg-blue-50');
+                } else {
+                    btn.classList.remove('bg-slate-900', 'text-white', 'border-slate-900');
+                    btn.classList.add('text-slate-700', 'border-slate-300');
+                }
+            });
+            renderTable();
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchTerm = e.target.value;
+            renderTable();
+        });
+
+        function jumpToExtra() {
+            if (!extraExpanded) toggleExtraPanel();
+            document.getElementById('extraToggle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function initCharts() {
+            const counts = { '高': 0, '中': 0, '低': 0 };
+            primaryTenders().forEach(t => counts[t.priority]++);
+
+            // 重复调用时先销毁旧实例，避免 canvas 复用报错
+            if (window.__priorityChart) window.__priorityChart.destroy();
+            if (window.__categoryChart) window.__categoryChart.destroy();
+
+            // Priority distribution doughnut chart
+            window.__priorityChart = new Chart(document.getElementById('priorityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['高优先级', '中优先级', '低优先级'],
+                    datasets: [{
+                        data: [counts['高'], counts['中'], counts['低']],
+                        backgroundColor: ['#dc2626', '#d97706', '#2563eb'],
+                        borderWidth: 0,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { usePointStyle: true, padding: 20, font: { family: 'Noto Sans SC' } } }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // Category TOP5 bar chart
+            const categoryCounts = {};
+            primaryTenders().forEach(t => {
+                categoryCounts[t.category] = (categoryCounts[t.category] || 0) + 1;
+            });
+            const sortedCategories = Object.entries(categoryCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            window.__categoryChart = new Chart(document.getElementById('categoryChart'), {
+                type: 'bar',
+                data: {
+                    labels: sortedCategories.map(c => c[0]),
+                    datasets: [{
+                        label: '招标数量',
+                        data: sortedCategories.map(c => c[1]),
+                        backgroundColor: '#0f172a',
+                        borderRadius: 6,
+                        barThickness: 24
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: 'Noto Sans SC' } }, grid: { color: '#f1f5f9' } },
+                        x: { ticks: { font: { family: 'Noto Sans SC', size: 11 }, maxRotation: 30, minRotation: 30 }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function exportTable() {
+            const filtered = primaryTenders().filter(t => {
+                const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
+                const matchesSearch = searchTerm === '' || 
+                    t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    t.platform.toLowerCase().includes(searchTerm.toLowerCase());
+                const state = getReviewState(t.id);
+                const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
+                return matchesPriority && matchesSearch && matchesState;
+            });
+
+            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,投标截止时间,一手平台,审阅状态,公告链接\n';
+            const push = (t, tier) => {
+                const state = getReviewState(t.id);
+                const s = scoreTender(t, filterConfig);
+                csv += `${tier},${s.excluded ? 0 : s.score},${t.priority},"${t.name}","${t.unit}","${t.category}",${t.publish},"${t.deadline}","${t.platform}","${state}","${t.link}"\n`;
+            };
+            filtered.forEach(t => push(t, '一级'));
+            extraTenders().forEach(t => push(t, '多余'));
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `招标信息_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        }
+
+        // Delegated event listener for review state buttons and delete buttons
+        document.getElementById('tableBody').addEventListener('click', function(e) {
+            const stateBtn = e.target.closest('.state-btn');
+            if (stateBtn && stateBtn.dataset.id) {
+                cycleReviewState(stateBtn.dataset.id);
+                renderTable();
+                updateStats();
+                return;
+            }
+            const demoteBtn = e.target.closest('.demote-btn');
+            if (demoteBtn && demoteBtn.dataset.demoteId) {
+                demoteTender(demoteBtn.dataset.demoteId);
+                return;
+            }
+            const delBtn = e.target.closest('.delete-btn');
+            if (delBtn && delBtn.dataset.deleteId) {
+                deleteTender(delBtn.dataset.deleteId);
+            }
+        });
+
+        // 多余信息区：升级 / 删除按钮
+        document.getElementById('extraTableBody').addEventListener('click', function (e) {
+            const btn = e.target.closest('.promote-btn');
+            if (btn && btn.dataset.promoteId) { promoteTender(btn.dataset.promoteId); return; }
+            const delBtn = e.target.closest('.delete-btn');
+            if (delBtn && delBtn.dataset.deleteId) deleteTender(delBtn.dataset.deleteId);
+        });
+
+        // 工具栏：词表删除（事件委托）
+        document.getElementById('toolDrawer').addEventListener('click', function (e) {
+            const del = e.target.closest('.cfg-del');
+            if (!del) return;
+            const key = del.dataset.k;
+            const i = parseInt(del.dataset.i, 10);
+            if (!filterConfig[key] || isNaN(i)) return;
+            filterConfig[key].splice(i, 1);
+            scoreCache = {};
+            renderWordList(key);
+            updateConfigPreview();
+        });
+
+        // 工具栏：滑块实时预览
+        ['cfgThreshold', 'wDevice', 'wKeyword', 'wAction', 'wUnit', 'wNoise'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => {
+                const labelId = id === 'cfgThreshold' ? 'cfgThresholdVal' : id + 'Val';
+                const label = document.getElementById(labelId);
+                if (label) label.textContent = el.value;
+                readConfigFromUI();
+                updateConfigPreview();
+            });
+        });
+
+        // 工具栏：输入框回车添加
+        Object.entries(WORD_LIST_META).forEach(([key, meta]) => {
+            const input = document.getElementById(meta.input);
+            if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addCfgWord(key); });
+        });
+
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerOpen) toggleDrawer(); });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            statuses = await loadStatuses();
+            keywords = await loadKeywords();
+            manualTenders = await loadManualTenders();
+            await loadFilterConfig();
+
+            // 自动规则：发布时间早于 30 天的信息删除
+            applyPublishAutoDelete();
+
+            // 自动归档：已查阅满30天的招标信息从列表中移除
+            const now = Date.now();
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const activeTenders = [];
+            archivedTenders = [];
+            for (const t of tenders) {
+                const state = statuses[t.id];
+                const timeStr = statuses[t.id + '_time'];
+                if (state === '已查阅' && timeStr) {
+                    const reviewedAt = new Date(timeStr).getTime();
+                    if (!isNaN(reviewedAt) && now - reviewedAt > THIRTY_DAYS_MS) {
+                        archivedTenders.push(t);
+                        continue;
+                    }
+                }
+                activeTenders.push(t);
+            }
+            tenders = activeTenders;
+
+            mergeManualTenders();
+            renderKeywords();
+            scoreCache = {};
+            renderTable();
+            renderExtraTable();
+            updateStats();
+            initCharts();
+            syncConfigUI();
+        });
+    </script>
+</body>
+</html>
