@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>招标信息可视化看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Noto Sans SC', sans-serif; }
@@ -267,7 +266,7 @@
 
         <!-- Footer -->
         <div class="mt-8 text-center text-sm text-slate-400 fade-in" style="animation-delay: 0.5s">
-            <p>数据来源：招标信息汇总.md | 生成时间：2026-07-31</p>
+            <p>数据来源：招标信息汇总.md | 生成时间：<span id="footerDate">2026-07-31</span></p>
         </div>
     </div>
 
@@ -15703,7 +15702,7 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const list = extraTenders().slice().sort((a, b) => {
+            const list = extraTenders().filter(t => currentPlatformFilter === 'all' || t.platform === currentPlatformFilter).slice().sort((a, b) => {
                 const sa = scoreTender(a, filterConfig).score;
                 const sb = scoreTender(b, filterConfig).score;
                 if (sa !== sb) return sb - sa;
@@ -15948,6 +15947,9 @@
             updateStats();
             renderPlatformFilters();
             syncConfigUI();
+            // 页脚生成时间动态显示
+            const fd = document.getElementById('footerDate');
+            if (fd) fd.textContent = new Date().toISOString().split('T')[0];
         });
     </script>
 </body>
