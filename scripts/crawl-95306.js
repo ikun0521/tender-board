@@ -23,6 +23,14 @@
  * 列表/详情返回的 latestDocumentSaleEndTime 即「采购文件获取/报名截止」，
  * 统一以此为截止日期基准，不再从正文解析投标递交截止。
  *
+ * 【全量兜底通道 —— 防漏抓（默认开启）】
+ * 关键词通道只搜「标题含关键词」的公告，标题不含设备词的（如"XX段2026年设备采购"）
+ * 会漏掉。本爬虫默认额外跑一条"全量通道"：
+ *   空标题 + 时间窗(startDate/endDate 取近 --days 天) + noticeType
+ *   → 拉回时间窗内全部公告列表 → 本地用 设备词/行为词 粗筛（剔除基建/物业/土建等噪音）
+ *   → 与关键词通道结果按 id 合并去重。
+ * 实测 17 天时间窗可拉回 7439 条全量项目公告。
+ *
  * 【公告类型字典 noticeType】
  *   01 项目公告(可投标)  02 变更公告  03 补遗公告  04 中标公示
  *   05 结果公告          06 采购方式公示  07 结果公示
@@ -43,7 +51,9 @@
  *   --detail             抓取详情正文并解析投标截止日期（强烈建议开启）
  *   --no-filter          不过滤已截止项目（默认仅保留 截止 >= 明天 与 待确认）
  *   --keep-auction       保留废旧物资处置/拍卖类（默认剔除）
- *   --days <n>           仅保留最近 n 天内发布的公告，默认不限
+ *   --days <n>           时间窗天数（全量通道按此拉取），默认 30
+ *   --no-full            关闭全量兜底通道（仅关键词通道）
+ *   --max-detail <n>     详情抓取上限（默认 1500，防止请求过多）
  *   --out <file>         输出 JSON 路径，默认 scripts/95306-candidates.json
  *   --verbose            打印每条抓取明细
  */
@@ -195,6 +205,61 @@ async function getDetail(noticeId) {
   };
 }
 
+/**
+ * 全量兜底通道：空标题 + 时间窗（近 days 天）拉取全部公告列表，
+ * 本地用 isFullScanRelevant 粗筛，返回候选数组（不含详情）。
+ * 翻页直到超出时间窗或页数上限。
+ */
+async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages = 800, verbose = false } = {}) {
+  const cutoff = todayPlusDays(-days);
+  const out = [];
+  const seen = new Set();
+  for (let p = 1; p <= maxPages; p++) {
+    let list;
+    try {
+      const r = await searchList('', { noticeType, pageNum: p });
+      list = r.list || [];
+      if (verbose && p === 1) {
+        console.log(`[全量] 时间窗近${days}天, 类型${noticeType || 'all'} 总命中 ${r.totalCount}, 逐页拉取...`);
+      }
+    } catch (e) {
+      console.log(`[全量] 第${p}页失败: ${e.message}`);
+      break;
+    }
+    if (!list.length) break;
+
+    let pageFullyOld = true;
+    for (const item of list) {
+      const title = strip(item.notTitle);
+      if (!title || seen.has(item.id)) continue;
+      const checkDate = parseDateLoose((item.checkTime || '').split(' ')[0]);
+      if (checkDate && checkDate < cutoff) {
+        // 时间倒序：本条已早于时间窗，后面的更早，结束整页扫描
+        pageFullyOld = false;
+        break;
+      }
+      if (!isFullScanRelevant(title, keywords)) continue;
+      seen.add(item.id);
+      out.push({
+        id: item.id,
+        name: title,
+        noticeTypeName: item.noticeTypeName || '',
+        bidTypeName: item.bidTypeName || '',
+        professionalName: item.professionalName || '',
+        publish: (item.checkTime || '').split(' ')[0],
+        latestEnd: item.latestDocumentSaleEndTime || '',
+        digest: strip(item.digest),
+        keyword: '【全量兜底】',
+        fromFullScan: true,
+      });
+    }
+    if (verbose && p % 50 === 0) console.log(`       ...第${p}页 累计${out.length}条`);
+    await sleep(REQUEST_INTERVAL);
+    if (!pageFullyOld) break; // 本页出现早于时间窗的条目 → 停止
+  }
+  return out;
+}
+
 // ============ 关键词加载 ============
 
 function getArg(name, def) {
@@ -268,6 +333,25 @@ const RESULT_NOTICE_RE =
  * 但因标题含关键词会被搜出来，默认剔除。--keep-auction 可保留。
  */
 const AUCTION_RE = /(物资处置|废旧物资|废钢|报废|处置项目|资产处置|拍卖)/;
+
+/**
+ * 全量通道粗筛：标题命中设备关键词 或 采购行为词 → 值得保留（宁滥勿缺，详情页再确认）。
+ * 明显噪音（基建/物业/土建/办公生活类）先剔除，避免全量通道被土建工程公告淹没。
+ */
+const FULL_SCAN_ACTION_TERMS = [
+  '采购', '招标', '询价', '竞价', '比选', '竞争性谈判', '磋商', '谈判',
+  '维修', '大修', '改造', '委外', '维保', '供应', '物资', '配件', '备件',
+  '购置', '租赁', '试验', '检测', '检修', '整治',
+];
+const FULL_SCAN_NOISE_RE =
+  /(房屋|厂房|土建|房建|装修|装饰|绿化|保洁|物业|消防|防雨棚|屋面|门窗|幕墙|道路|桥梁|隧道|管网|给排水|食堂|宿舍|办公楼|营业厅|站房|仓库|更衣室|门厅|酒店|餐厅|景观|园林|市政|劳务|保安|印刷|会议|培训|监理|审计|咨询|设计服务|弱电|安防|照明|空调安装|通风空调|广告|绿化养护|垃圾清运)/;
+
+function isFullScanRelevant(title, keywords) {
+  if (!title) return false;
+  if (FULL_SCAN_NOISE_RE.test(title)) return false;
+  if (keywords.some((k) => k && title.includes(k))) return true;
+  return FULL_SCAN_ACTION_TERMS.some((w) => title.includes(w));
+}
 
 /**
  * 国铁专用单位兜底提取。
@@ -418,8 +502,32 @@ async function main() {
 
   let candidates = [...byId.values()];
   console.log(
-    `\n[去重] ${queried} 次查询（失败 ${failed}），去重后 ${candidates.length} 条公告`
+    `\n[去重] ${queried} 次查询（失败 ${failed}），关键词通道去重后 ${candidates.length} 条公告`
   );
+
+  // ========== 全量兜底通道（默认开启，--no-full 关闭）==========
+  if (!hasFlag('no-full')) {
+    const fullDays = daysLimit > 0 ? daysLimit : 30;
+    const maxFullPages = parseInt(getArg('max-pages', '800'), 10) || 800;
+    const startFull = candidates.length;
+    console.log(`\n[全量] 启动全量兜底通道（时间窗近 ${fullDays} 天, 最多 ${maxFullPages} 页）...`);
+    for (const nt of noticeTypes) {
+      const fullList = await scanFullWindow(keywords, {
+        noticeType: nt,
+        days: fullDays,
+        maxPages: maxFullPages,
+        verbose,
+      });
+      for (const c of fullList) {
+        if (!byId.has(c.id)) byId.set(c.id, c);
+      }
+      await sleep(REQUEST_INTERVAL);
+    }
+    candidates = [...byId.values()];
+    console.log(`[全量] 全量通道新增 ${candidates.length - startFull} 条，合并后共 ${candidates.length} 条`);
+  } else {
+    console.log('\n[全量] 已关闭全量兜底通道（--no-full）');
+  }
 
   // 结果类公告过滤（服务端已按 noticeType 过滤，这里按标题再兜一层）
   if (noticeTypeArg !== 'all') {
@@ -453,15 +561,17 @@ async function main() {
   }
 
   // 截止日期统一用 latestDocumentSaleEndTime（报名截止）
+  const maxDetail = parseInt(getArg('max-detail', '1500'), 10) || 0;
+  const detailList = withDetail ? candidates.slice(0, maxDetail) : [];
   if (withDetail && candidates.length) {
-    console.log(`\n[详情] 开始抓取 ${candidates.length} 条正文...`);
+    console.log(`\n[详情] 抓取 ${detailList.length} 条正文${candidates.length > detailList.length ? `（其余 ${candidates.length - detailList.length} 条跳过 --max-detail）` : ''}...`);
     let done = 0;
     let idx = 0;
     const CONCURRENCY = 3;
 
     async function worker() {
-      while (idx < candidates.length) {
-        const c = candidates[idx++];
+      while (idx < detailList.length) {
+        const c = detailList[idx++];
         try {
           const d = await getDetail(c.id);
           if (d) {
@@ -480,7 +590,7 @@ async function main() {
         c.deadline = merged.value;
         c.deadlineSource = merged.from;
         done++;
-        if (done % 20 === 0) console.log(`       ...${done}/${candidates.length}`);
+        if (done % 20 === 0) console.log(`       ...${done}/${detailList.length}`);
         await sleep(REQUEST_INTERVAL);
       }
     }
@@ -548,7 +658,6 @@ async function main() {
   fs.writeFileSync(outFile, JSON.stringify(out, null, 2), 'utf8');
 
   const pending = out.filter((x) => x.deadline === '待确认').length;
-  const fromBody = out.filter((x) => x.deadlineSource === 'body').length;
   const withUnit = out.filter((x) => x.unit).length;
 
   console.log(`\n${'='.repeat(60)}`);
@@ -556,8 +665,7 @@ async function main() {
   console.log(
     `有明确截止日期  : ${out.length - pending} (${out.length ? (((out.length - pending) / out.length) * 100).toFixed(1) : 0}%)`
   );
-  console.log(`  └ 来自正文解析: ${fromBody}（投标截止，权威）`);
-  console.log(`  └ 来自报名截止: ${out.length - pending - fromBody}（兜底）`);
+  console.log(`  └ 全部来自报名截止(latestDocumentSaleEndTime)`);
   console.log(`待确认          : ${pending}`);
   console.log(
     `有招标单位      : ${withUnit} (${out.length ? ((withUnit / out.length) * 100).toFixed(1) : 0}%)`
@@ -581,7 +689,29 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error('[致命错误]', e.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('[致命错误]', e.message);
+    process.exit(1);
+  });
+}
+
+// 供其他脚本复用（如 resolve-deadlines.js 按公告 id 直查详情）
+module.exports = {
+  post,
+  getDetail,
+  searchList,
+  mergeDeadline,
+  strip,
+  stripBody,
+  parseDateLoose,
+  todayPlusDays,
+  sleep,
+  newMhId,
+  REQUEST_INTERVAL,
+  HOST,
+  BASE,
+  NOTICE_TYPE_NAMES,
+  extractUnitFrom95306Title,
+  dedupUnitName,
+};
