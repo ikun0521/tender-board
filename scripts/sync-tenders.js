@@ -99,7 +99,7 @@ async function fetchKeywords() {
   const txt = readFile(KEYWORDS_FILE);
   if (!txt) return [];
   return txt
-    .split(/\r?\n/)
+    .split(/[,，、\r\n]+/)
     .map((l) => l.trim())
     .filter(Boolean);
 }

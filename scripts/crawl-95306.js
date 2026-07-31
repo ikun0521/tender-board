@@ -312,7 +312,7 @@ async function loadKeywords() {
   if (fs.existsSync(local)) {
     const arr = fs
       .readFileSync(local, 'utf8')
-      .split(/[,，\r\n]+/)
+      .split(/[,，、\r\n]+/)
       .map((s) => s.trim())
       .filter(Boolean);
     console.log(`[关键词] 从本地文件读取 ${arr.length} 个`);
