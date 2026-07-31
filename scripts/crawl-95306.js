@@ -208,36 +208,38 @@ async function getDetail(noticeId) {
 /**
  * 全量兜底通道：空标题 + 时间窗（近 days 天）拉取全部公告列表，
  * 本地用 isFullScanRelevant 粗筛，返回候选数组（不含详情）。
- * 服务端按 startDate/endDate 过滤时间，翻页到窗口边界（返回空页）即停，
- * 不需要翻到 maxPages —— 速度快且不漏窗口内公告。
+ * 列表按发布时间倒序（sortCondition=0），新公告在前 → 本地按 checkTime
+ * 判断是否已超出时间窗边界，一旦越过即停止翻页（不必翻到 maxPages）。
+ * 窗口越小停止越早：--days 7 约 300 页，--days 30 约 1300 页。
  */
-async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages = 3000, verbose = false } = {}) {
+async function scanFullWindow(keywords, { noticeType = '', days = 7, maxPages = 3000, verbose = false } = {}) {
   const cutoff = todayPlusDays(-days);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
-  const todayStr = new Date().toISOString().split('T')[0];
   const out = [];
   const seen = new Set();
   for (let p = 1; p <= maxPages; p++) {
     let list;
     try {
-      const r = await searchList('', { noticeType, pageNum: p, startDate: cutoffStr, endDate: todayStr });
+      const r = await searchList('', { noticeType, pageNum: p });
       list = r.list || [];
       if (verbose && p === 1) {
-        console.log(`[全量] 服务端时间窗 ${cutoffStr}~${todayStr}, 类型${noticeType || 'all'} 总命中 ${r.totalCount}, 逐页拉取...`);
+        console.log(`[全量] 时间窗近${days}天, 类型${noticeType || 'all'} 总命中 ${r.totalCount}, 逐页拉取...`);
       }
     } catch (e) {
       console.log(`[全量] 第${p}页失败: ${e.message}`);
       break;
     }
-    // 服务端已按时间窗过滤：返回空页说明已翻完窗口内全部
-    if (!list.length) {
-      if (verbose) console.log(`[全量] 第${p}页为空, 窗口内公告已拉完`);
-      break;
-    }
+    if (!list.length) break;
 
+    let reachedBoundary = false;
     for (const item of list) {
       const title = strip(item.notTitle);
       if (!title || seen.has(item.id)) continue;
+      const checkDate = parseDateLoose((item.checkTime || '').split(' ')[0]);
+      if (checkDate && checkDate < cutoff) {
+        // 时间倒序：本条已早于时间窗，后面的更早 → 停止整页扫描
+        reachedBoundary = true;
+        break;
+      }
       if (!isFullScanRelevant(title, keywords)) continue;
       seen.add(item.id);
       out.push({
@@ -255,6 +257,10 @@ async function scanFullWindow(keywords, { noticeType = '', days = 30, maxPages =
     }
     if (verbose && p % 50 === 0) console.log(`       ...第${p}页 累计${out.length}条`);
     await sleep(REQUEST_INTERVAL);
+    if (reachedBoundary) {
+      if (verbose) console.log(`[全量] 第${p}页已越过时间窗边界, 停止`);
+      break;
+    }
   }
   return out;
 }
@@ -529,7 +535,7 @@ async function main() {
   // ========== 全量兜底通道（默认开启，--no-full 关闭）==========
   if (!hasFlag('no-full')) {
     const fullDays = daysLimit > 0 ? daysLimit : 30;
-    const maxFullPages = parseInt(getArg('max-pages', '800'), 10) || 800;
+    const maxFullPages = parseInt(getArg('max-pages', '3000'), 10) || 3000;
     const startFull = candidates.length;
     console.log(`\n[全量] 启动全量兜底通道（时间窗近 ${fullDays} 天, 最多 ${maxFullPages} 页）...`);
     for (const nt of noticeTypes) {
