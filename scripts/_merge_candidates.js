@@ -131,6 +131,33 @@ for (const c of readJson('scripts/szmetro-candidates.json')) {
   });
 }
 
+// ---- 中国招标投标公共服务平台 cebpubservice（法定聚合兜底，覆盖全平台） ----
+for (const c of readJson('scripts/cebpubservice-candidates.json')) {
+  const unit = (c.unit || '').trim();
+  const publish = (c.publish || '').trim();
+  const deadline = (c.deadline || '').trim();
+  const srcPlat = (c.sourcePlatform || '').trim();
+  let snip = '';
+  if (srcPlat) snip += `来源平台：${srcPlat}（中国招标投标公共服务平台聚合）。`;
+  if (unit) snip += `采购人：${unit}。`;
+  if (publish) snip += `发布时间：${publish}。`;
+  if (deadline && deadline !== '待确认') snip += `开标/截止：${deadline}。`;
+  const url = c.url || c.link;
+  if (!url) continue;
+  out.push({
+    title: (c.title || '').trim(),
+    url,
+    snippet: snip,
+    keyword: c.keyword || '',
+    _src: 'cebpubservice',
+    // 结构化字段：同步时直接采用，作为权威来源（权重最高）
+    deadline,
+    unit,
+    publish,
+    platform: c.platform || srcPlat || '中国招标投标公共服务平台',
+  });
+}
+
 // ---- WebSearch 补充 ----
 for (const c of readJson('scripts/websearch-candidates.json')) {
   if (!c.url || !c.title) continue;

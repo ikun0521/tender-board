@@ -798,8 +798,8 @@ async function main() {
   for (const c of candidates) {
     if (!c.url) continue;
     let info;
-    // 95306 / crrcgo / suzhou-metro / szmetro 一手平台爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
-    if ((c._src === '95306' || c._src === 'crrcgo' || c._src === 'suzhou-metro' || c._src === 'szmetro') && (c.deadline || c.unit || c.publish)) {
+    // 95306 / crrcgo / suzhou-metro / szmetro / cebpubservice 一手平台爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
+    if ((c._src === '95306' || c._src === 'crrcgo' || c._src === 'suzhou-metro' || c._src === 'szmetro' || c._src === 'cebpubservice') && (c.deadline || c.unit || c.publish)) {
       info = buildInfoFromStructured(c);
     } else {
       const pageHtml = await fetchPageText(c.url);
