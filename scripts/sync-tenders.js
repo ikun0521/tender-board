@@ -798,8 +798,8 @@ async function main() {
   for (const c of candidates) {
     if (!c.url) continue;
     let info;
-    // 95306 / crrcgo / suzhou-metro 一手平台爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
-    if ((c._src === '95306' || c._src === 'crrcgo' || c._src === 'suzhou-metro') && (c.deadline || c.unit || c.publish)) {
+    // 95306 / crrcgo / suzhou-metro / szmetro 一手平台爬虫结果权重最高：结构化字段齐全时直接采用，跳过重新抓取与重抽
+    if ((c._src === '95306' || c._src === 'crrcgo' || c._src === 'suzhou-metro' || c._src === 'szmetro') && (c.deadline || c.unit || c.publish)) {
       info = buildInfoFromStructured(c);
     } else {
       const pageHtml = await fetchPageText(c.url);
@@ -808,6 +808,14 @@ async function main() {
     }
     if (!info || !info.name) continue;
     if (isExcluded(info.name + ' ' + (c.snippet || ''))) continue;
+
+    // 截止日期过滤（与看板规则一致）：必须为明确的 YYYY-MM-DD[ HH:mm] 且 >= 今天，否则不入库
+    const dlRaw = String(info.deadline || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(dlRaw)) continue;
+    const dlDate = new Date(dlRaw.replace(' ', 'T'));
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    if (isNaN(dlDate.getTime()) || dlDate < today0) continue;
 
     const key = `${normalizeName(info.name)}|${info.publish}`;
     if (dedupKeySet.has(key)) continue;
