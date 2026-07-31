@@ -419,7 +419,7 @@
                     <label class="text-sm font-semibold text-slate-900">一级门槛（相关度阈值）</label>
                     <span class="text-2xl font-bold text-slate-900 count-up" id="cfgThresholdVal">80</span>
                 </div>
-                <input type="range" id="cfgThreshold" min="30" max="100" step="5" value="80" class="w-full mt-2">
+                <input type="range" id="cfgThreshold" min="30" max="100" step="5" value="45" class="w-full mt-2">
                 <div class="flex justify-between text-[11px] text-slate-400 mt-1"><span>30 宽松</span><span>100 严苛</span></div>
                 <div id="cfgPreview" class="mt-3 grid grid-cols-2 gap-2 text-center">
                     <div class="bg-emerald-50 border border-emerald-200 rounded-lg py-2">
@@ -447,11 +447,11 @@
                     </div>
                     <div>
                         <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">采购行为词（采购/招标/购置…）</span><span class="font-bold text-slate-900" id="wActionVal">10</span></div>
-                        <input type="range" id="wAction" min="0" max="30" step="5" value="10" class="w-full">
+                        <input type="range" id="wAction" min="0" max="30" step="5" value="0" class="w-full">
                     </div>
                     <div>
                         <div class="flex justify-between text-xs mb-1"><span class="text-slate-600">单位属性（铁路/中车/地铁系统）</span><span class="font-bold text-slate-900" id="wUnitVal">10</span></div>
-                        <input type="range" id="wUnit" min="0" max="30" step="5" value="10" class="w-full">
+                        <input type="range" id="wUnit" min="0" max="30" step="5" value="0" class="w-full">
                     </div>
                     <div class="pt-2 border-t border-slate-100">
                         <div class="flex justify-between text-xs mb-1"><span class="text-red-600">噪音词扣分（房屋维修/绿化…）</span><span class="font-bold text-red-700" id="wNoiseVal">40</span></div>
@@ -14930,8 +14930,8 @@
         /* ==================== 相关度筛选（一级 / 多余信息） ==================== */
 
         const DEFAULT_FILTER_CONFIG = {
-            threshold: 80,
-            weights: { device: 55, keyword: 25, action: 10, unit: 10 },
+            threshold: 45,
+            weights: { device: 55, keyword: 25, action: 0, unit: 0 },
             noisePenalty: 40,
             deviceWords: [
                 '试验台', '实验台', '试验器', '试验机', '试验装置', '试验设备', '检测台', '测试台',
@@ -14983,6 +14983,10 @@
                 });
                 if (remote.weights) base.weights = { ...DEFAULT_FILTER_CONFIG.weights, ...remote.weights };
             }
+            // 业务决策：单位分/采购行为分恒为 0（无关信息将得 0 分被过滤），
+            // 防止 COS/localStorage 里旧的权重配置（action:10/unit:10）覆盖新默认
+            base.weights.action = DEFAULT_FILTER_CONFIG.weights.action;
+            base.weights.unit = DEFAULT_FILTER_CONFIG.weights.unit;
             filterConfig = base;
         }
 
@@ -15056,8 +15060,16 @@
         function isDemoted(id) { return (filterConfig.demoted || []).map(String).includes(String(id)); }
         function isDeleted(id) { return (filterConfig.deletedIds || []).map(String).includes(String(id)); }
 
-        function primaryTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'primary'); }
-        function extraTenders() { return tenders.filter(t => !isDeleted(t.id) && getTier(t, filterConfig) === 'extra'); }
+        /** 0 分（未命中任何设备词/关键词）视为无关，不展示；人工导入与人工升级的始终保留 */
+        function isVisibleTender(t) {
+            if (isDeleted(t.id)) return false;
+            if (t.platform === '人工') return true;
+            if (isPromoted(t.id)) return true;
+            return scoreTender(t, filterConfig).score > 0;
+        }
+
+        function primaryTenders() { return tenders.filter(t => isVisibleTender(t) && getTier(t, filterConfig) === 'primary'); }
+        function extraTenders() { return tenders.filter(t => isVisibleTender(t) && getTier(t, filterConfig) === 'extra'); }
 
         function scoreColor(score) {
             if (score >= filterConfig.threshold) return { bar: '#059669', text: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' };
