@@ -131,6 +131,30 @@ for (const c of readJson('scripts/szmetro-candidates.json')) {
   });
 }
 
+// ---- 深圳阳光采购 szygcgpt ----
+for (const c of readJson('scripts/szygcgpt-candidates.json')) {
+  const unit = (c.unit || '').trim();
+  const publish = (c.publish || '').trim();
+  const deadline = (c.deadline || '').trim();
+  let snip = '';
+  if (unit) snip += `采购人：${unit}。`;
+  if (publish) snip += `发布时间：${publish}。`;
+  if (deadline && deadline !== '待确认') snip += `截止：${deadline}。`;
+  const url = c.link;
+  if (!url) continue;
+  out.push({
+    title: (c.name || '').trim(),
+    url,
+    snippet: snip,
+    keyword: c.keyword || '',
+    _src: 'szygcgpt',
+    deadline,
+    unit,
+    publish,
+    platform: c.platform || '深圳阳光采购',
+  });
+}
+
 // ---- 中国招标投标公共服务平台 cebpubservice（法定聚合兜底，覆盖全平台） ----
 for (const c of readJson('scripts/cebpubservice-candidates.json')) {
   const unit = (c.unit || '').trim();
