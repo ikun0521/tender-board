@@ -477,6 +477,14 @@ async function main() {
   const outFile = path.resolve(ROOT, getArg('out', 'scripts/95306-candidates.json'));
 
   const keywords = await loadKeywords();
+  // 柳州/南宁局定向补充词：提升广西及南宁局检修装备公告召回（2026-08 柳州重点市场）
+  const LIUZHOU_KEYWORDS = [
+    '柳州机车车辆', '柳州机务段', '柳州车辆段', '柳州供电段', '柳州工务段', '柳州电务段',
+    '南宁局', '南宁机务段', '南宁车辆段', '广西铁路', '柳州铁路', 'HXN5', '柳州车辆厂',
+  ];
+  for (const w of LIUZHOU_KEYWORDS) {
+    if (!keywords.includes(w)) keywords.push(w);
+  }
   console.log(
     `[配置] 关键词 ${keywords.length} 个 | 公告类型 ${noticeTypeArg} | 每词 ${pages} 页 | 详情 ${withDetail ? '开' : '关'}`
   );
