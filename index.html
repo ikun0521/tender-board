@@ -272,6 +272,40 @@
             </div>
         </div>
 
+        <!-- 噪音预览：被爬虫 isRailRelevant 拦截的候选，开关打开时显示，与一级看板分离 -->
+        <div id="noiseSection" class="hidden bg-white rounded-2xl shadow-sm border border-red-200 mt-6 fade-in overflow-hidden">
+            <button onclick="toggleNoisePanel()" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-red-50/40 transition-colors focus:outline-none">
+                <span class="flex items-center gap-3">
+                    <span class="text-lg font-semibold text-red-700">🚩 被拦截候选（噪音预览）</span>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                        <span id="noiseCount">0</span> 条
+                    </span>
+                    <span class="text-sm text-slate-400 hidden sm:inline">被关键词匹配但被噪音过滤拦掉的候选，仅预览、未入看板</span>
+                </span>
+                <span id="noiseArrow" class="text-red-500 transition-transform duration-300 transform">▶</span>
+            </button>
+            <div id="noiseBody" class="overflow-hidden transition-all duration-300 ease-in-out" style="max-height: 0; opacity: 0;">
+                <div class="px-5 pb-5">
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200">
+                                    <th class="w-[92px] min-w-[92px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">相关度</th>
+                                    <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
+                                    <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
+                                    <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
+                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                                    <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
+                                </tr>
+                            </thead>
+                            <tbody id="noiseTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                    <div id="noiseEmpty" class="hidden py-10 text-center text-slate-400 text-sm">当前没有可被拦截的候选</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="mt-8 text-center text-sm text-slate-400 fade-in" style="animation-delay: 0.5s">
             <p>数据来源：招标信息汇总.md | 生成时间：<span id="footerDate">2026-07-31</span></p>
@@ -18218,9 +18252,14 @@
             if (showNoise) {
                 bg.classList.add('bg-slate-900'); bg.classList.remove('bg-slate-300');
                 knob.classList.add('translate-x-4');
+                const ns = document.getElementById('noiseSection');
+                if (ns) ns.classList.remove('hidden');
+                renderNoiseTable();
             } else {
                 bg.classList.remove('bg-slate-900'); bg.classList.add('bg-slate-300');
                 knob.classList.remove('translate-x-4');
+                const ns = document.getElementById('noiseSection');
+                if (ns) ns.classList.add('hidden');
             }
             renderTable();
         }
@@ -18235,18 +18274,7 @@
             const emptyState = document.getElementById('emptyState');
             tbody.innerHTML = '';
 
-            let source = primaryTenders();
-            if (showNoise) {
-                const nt = (window.noiseTenders || []).map((t, i) => {
-                    const sc = scoreTender(t, filterConfig).score;
-                    return Object.assign({}, t, {
-                        id: t.id || ('noise-' + i),
-                        priority: sc >= filterConfig.threshold ? '中' : '低',
-                        __noise: true,
-                    });
-                });
-                source = source.concat(nt);
-            }
+            const source = primaryTenders();
 
             const filtered = source.filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
@@ -18330,6 +18358,63 @@
                     `;
                     tbody.appendChild(tr);
                 });
+            }
+        }
+
+        function renderNoiseTable() {
+            const tbody = document.getElementById('noiseTableBody');
+            if (!tbody) return;
+            const empty = document.getElementById('noiseEmpty');
+            tbody.innerHTML = '';
+            const list = (window.noiseTenders || []).map((t, i) => {
+                const sInfo = scoreTender(t, filterConfig);
+                return Object.assign({}, t, {
+                    id: t.id || ('noise-' + i),
+                    __score: sInfo.score,
+                    __hits: sInfo.hits || [],
+                });
+            }).sort((a, b) => b.__score - a.__score);
+
+            const cnt = document.getElementById('noiseCount');
+            if (cnt) cnt.textContent = list.length;
+            if (!list.length) {
+                if (empty) empty.classList.remove('hidden');
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+            list.forEach((t) => {
+                const sc = scoreColor(t.__score);
+                const tr = document.createElement('tr');
+                tr.className = 'table-row border-b border-slate-50 border-l-4 border-red-300 bg-red-50/40';
+                tr.innerHTML = `
+                    <td class="w-[92px] min-w-[92px] px-4 py-3 whitespace-nowrap">
+                        <div class="text-sm font-bold ${sc.text}">${t.__score}</div>
+                        <div class="score-bar mt-1"><i style="width:${t.__score}%;background:${sc.bar}"></i></div>
+                    </td>
+                    <td class="col-name px-4 py-3">
+                        <div class="table-text font-medium text-slate-900"><span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 mr-1 align-middle">🚩 未筛选</span>${t.name}</div>
+                        ${t.__hits.length ? `<div class="text-[11px] text-slate-400 mt-0.5">· ${t.__hits.slice(0, 3).map(escapeHtml).join(' / ')}</div>` : ''}
+                    </td>
+                    <td class="col-unit px-4 py-3"><div class="table-text text-slate-600">${t.unit}</div></td>
+                    <td class="col-deadline px-4 py-3 whitespace-nowrap table-text text-slate-600">${t.deadline}</td>
+                    <td class="col-platform px-4 py-3 whitespace-nowrap">${t.platform ? `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${t.platform}</span>` : '<span class="text-xs text-slate-300">—</span>'}</td>
+                    <td class="w-[90px] min-w-[90px] px-4 py-3 whitespace-nowrap"><div>${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center font-medium text-blue-600 hover:text-blue-800 transition-colors">查看公告<svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>` : '<span class="text-xs text-slate-300">—</span>'}</div><span class="block mt-1 text-[10px] text-slate-400">仅预览·未入看板</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleNoisePanel() {
+            const body = document.getElementById('noiseBody');
+            const arrow = document.getElementById('noiseArrow');
+            if (!body) return;
+            const open = body.style.maxHeight && body.style.maxHeight !== '0px';
+            if (open) {
+                body.style.maxHeight = '0px'; body.style.opacity = '0';
+                if (arrow) arrow.classList.remove('rotate-90');
+            } else {
+                body.style.maxHeight = body.scrollHeight + 'px'; body.style.opacity = '1';
+                if (arrow) arrow.classList.add('rotate-90');
             }
         }
 
