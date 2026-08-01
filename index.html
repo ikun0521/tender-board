@@ -18,8 +18,7 @@
         .fade-in { animation: fadeIn 0.6s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .count-up { font-variant-numeric: tabular-nums; }
-        .col-priority { width: 72px; min-width: 72px; }
-        .col-name { min-width: 320px; max-width: 420px; }
+                .col-name { min-width: 320px; max-width: 420px; }
         .col-unit { min-width: 240px; max-width: 340px; }
         .col-category { width: 120px; min-width: 120px; }
         .col-publish { width: 100px; min-width: 100px; }
@@ -92,46 +91,6 @@
             </div>
         </div>
 
-        <!-- Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in" style="animation-delay: 0.1s">
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-slate-500">高优先级</p>
-                        <p class="text-3xl font-bold text-red-600 mt-1 count-up" id="highCount">0</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                    </div>
-                </div>
-                <p class="text-sm text-slate-400 mt-3">需重点关注与跟进</p>
-            </div>
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-slate-500">中优先级</p>
-                        <p class="text-3xl font-bold text-amber-600 mt-1 count-up" id="mediumCount">0</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                </div>
-                <p class="text-sm text-slate-400 mt-3">持续跟踪评估</p>
-            </div>
-            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-slate-500">低优先级</p>
-                        <p class="text-3xl font-bold text-blue-600 mt-1 count-up" id="lowCount">0</p>
-                    </div>
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                </div>
-                <p class="text-sm text-slate-400 mt-3">常规关注即可</p>
-            </div>
-        </div>
-
         <!-- Review Status Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 fade-in" style="animation-delay: 0.15s">
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 card-hover">
@@ -182,11 +141,6 @@
                     </div>
                 </div>
                 <div class="flex gap-2 flex-wrap items-center">
-                    <button onclick="filterByPriority('all')" class="filter-btn active px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-slate-900 text-white" data-priority="all">全部</button>
-                    <button onclick="filterByPriority('高')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-red-50" data-priority="高">高优先级</button>
-                    <button onclick="filterByPriority('中')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-amber-50" data-priority="中">中优先级</button>
-                    <button onclick="filterByPriority('低')" class="filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-blue-50" data-priority="低">低优先级</button>
-                    <span class="w-px h-6 bg-slate-300 mx-1"></span>
                     <button onclick="filterByState('all')" class="state-filter-btn active px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-slate-900 text-white" data-state="all">全部状态</button>
                     <button onclick="filterByState('待查阅')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-red-50" data-state="待查阅">待查阅</button>
                     <button onclick="filterByState('已查阅')" class="state-filter-btn px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-green-50" data-state="已查阅">已查阅</button>
@@ -227,7 +181,6 @@
                 <table class="w-full" id="tenderTable">
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200">
-                            <th class="col-priority px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">优先级</th>
                             <th class="col-name px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
                             <th class="col-unit px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
                             <th class="col-category px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">产品类别</th>
@@ -20308,11 +20261,6 @@
                     tr.className = `table-row border-b border-slate-50 ${rowHighlight} ${isNoise ? 'border-l-4 border-red-300 bg-red-50/40' : ''}`.trim();
                     tr.style.animation = `fadeIn 0.4s ease-out ${index * 0.03}s both`;
                     tr.innerHTML = `
-                        <td class="col-priority px-4 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${priorityClass[t.priority]}">
-                                ${priorityLabel[t.priority]}
-                            </span>
-                        </td>
                         <td class="col-name px-4 py-4">
                             <div class="table-text font-medium text-slate-900">${isNoise ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 mr-1 align-middle">🚩 未筛选</span>' : ''}${t.name}</div>
                             <div class="flex items-center gap-1.5 mt-1">
@@ -20495,9 +20443,6 @@
                 reviewCounts[state] = (reviewCounts[state] || 0) + 1;
             });
             
-            animateCount('highCount', counts['高']);
-            animateCount('mediumCount', counts['中']);
-            animateCount('lowCount', counts['低']);
             animateCount('pendingCount', reviewCounts['待查阅']);
             animateCount('reviewedCount', reviewCounts['已查阅']);
             animateCount('followUpCount', reviewCounts['待跟进']);
@@ -20523,20 +20468,6 @@
                 }
                 el.textContent = Math.floor(current);
             }, 20);
-        }
-
-        function filterByPriority(priority) {
-            currentFilter = priority;
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                if (btn.dataset.priority === priority) {
-                    btn.classList.add('bg-slate-900', 'text-white', 'border-slate-900');
-                    btn.classList.remove('text-slate-700', 'border-slate-300', 'hover:bg-red-50', 'hover:bg-amber-50', 'hover:bg-blue-50');
-                } else {
-                    btn.classList.remove('bg-slate-900', 'text-white', 'border-slate-900');
-                    btn.classList.add('text-slate-700', 'border-slate-300');
-                }
-            });
-            renderTable();
         }
 
         // 🎯 柳州/南宁局 快捷筛选：title/单位/平台命中柳州、南宁局、广西、桂林即算相关
