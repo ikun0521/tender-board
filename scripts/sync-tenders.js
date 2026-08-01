@@ -10,7 +10,7 @@
  * - 搜索优先读取 --input / TENDER_SEARCH_RESULTS 提供的候选列表；
  *   未提供时尝试 DuckDuckGo HTML 搜索作为兜底（可能被反爬）。
  * - 抓取公告详情后按规则提取投标截止日期。
- * - 去重、分配优先级、更新 index.html、归档已查阅满 30 天记录、Git 提交推送。
+ * - 去重、分配优先级、更新 index.html、自动归档截止日期已过的记录、Git 提交推送。
  */
 
 const fs = require('fs');
@@ -624,6 +624,20 @@ function daysUntil(deadline) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * 截止日期是否已过：截止日当天仍视为有效（保留），从次日起移除。
+ * 仅对 deadline 明确（YYYY-MM-DD[ HH:mm]）的条目生效；「待确认」返回 false（留给发布超 30 天规则兜底）。
+ * 用于自动归档剔除规则：原「已查阅满 30 天」改为「截止日期一过即归档」。
+ */
+function isDeadlinePassed(deadline) {
+  if (!deadline || !isNormalizedDeadline(deadline)) return false;
+  const d = new Date(deadline.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d.getTime() < today.getTime();
+}
+
 function assignPriority(tender, keyword) {
   const remaining = daysUntil(tender.deadline);
   const name = tender.name;
@@ -645,17 +659,11 @@ async function loadStatuses() {
   return {};
 }
 
-async function archiveOldTenders(tenders, statuses) {
-  if (!statuses) statuses = await loadStatuses();
-  const now = Date.now();
+async function archiveExpiredTenders(tenders) {
   const archiveIds = [];
   for (const t of tenders) {
-    const state = statuses[t.id];
-    const time = statuses[`${t.id}_time`];
-    if (state === '已查阅' && time) {
-      const days = (now - new Date(time).getTime()) / (1000 * 60 * 60 * 24);
-      if (days > 30) archiveIds.push(t.id);
-    }
+    // 剔除规则：截止日期已过（截止日当天保留，次日起移除），不再依赖「已查阅」状态与 30 天计时
+    if (isDeadlinePassed(t.deadline)) archiveIds.push(t.id);
   }
   if (!archiveIds.length) return [];
 
@@ -692,26 +700,6 @@ async function archiveOldTenders(tenders, statuses) {
   }
 
   return archiveIds;
-}
-
-/**
- * 计算需要自动删除的 id：状态为「已查阅」且截止日期已过 3 天（含）以上的信息。
- * 返回需要删除的 id 数组（不影响归档逻辑，仅从看板移除）。
- */
-function computeExpiredReadDeletions(list, statuses) {
-  const now = Date.now();
-  const THRESH = 3 * 24 * 60 * 60 * 1000; // 3 天
-  const ids = [];
-  for (const t of list) {
-    const state = statuses[String(t.id)] || statuses[t.id];
-    if (state !== '已查阅') continue;
-    const d = parseDeadline(t.deadline || '');
-    if (!d || !d.value) continue;
-    const dt = new Date(d.value.replace(' ', 'T'));
-    if (isNaN(dt.getTime())) continue;
-    if (now - dt.getTime() >= THRESH) ids.push(t.id);
-  }
-  return ids;
 }
 
 /**
@@ -841,23 +829,19 @@ async function main() {
   // 状态（归档与自动删除共用，避免重复请求）
   const statuses = await loadStatuses();
 
-  // 归档
-  const archiveIds = await archiveOldTenders(existingTenders, statuses);
-  log(`归档已查阅满30天: ${archiveIds.length} 条`);
+  // 归档：截止日期已过（含未查阅项）移出看板，保留 7 天归档后可恢复
+  const archiveIds = await archiveExpiredTenders(existingTenders);
+  log(`归档截止日期已过: ${archiveIds.length} 条`);
 
-  // 自动删除：已查阅 且 截止日期已过 3 天
-  const deleteIds = computeExpiredReadDeletions(existingTenders, statuses);
-  log(`自动删除 已查阅且截止超3天: ${deleteIds.length} 条`);
-
-  // 自动删除：发布时间早于 30 天
+  // 自动删除：发布时间早于 30 天（兜底「待确认」/长期未清理项）
   const oldPublishIds = computeOldPublishDeletions(existingTenders);
   log(`自动删除 发布时间超30天: ${oldPublishIds.length} 条`);
 
   let keptTenders = existingTenders.filter(
-    (t) => !archiveIds.includes(t.id) && !deleteIds.includes(t.id) && !oldPublishIds.includes(t.id)
+    (t) => !archiveIds.includes(t.id) && !oldPublishIds.includes(t.id)
   );
 
-  if (!newTenders.length && !archiveIds.length && !deleteIds.length && !oldPublishIds.length) {
+  if (!newTenders.length && !archiveIds.length && !oldPublishIds.length) {
     log('无新增/归档，跳过文件更新与 Git 提交');
     log(`当前看板总数: ${existingTenders.length}`);
     return;
