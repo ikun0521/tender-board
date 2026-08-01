@@ -265,8 +265,17 @@ function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr, metaPatches) 
     (l) => !/^\s*window\.noiseTenders\s*=/.test(l) && !/^\s*let noiseTenders\s*=/.test(l)
   );
   // 注入被爬虫筛选拦掉的噪音条目（供前端「显示未筛选噪音」开关按需展示）
-  const noiseDecl = Array.isArray(noiseArr) && noiseArr.length
-    ? `        window.noiseTenders = ${JSON.stringify(noiseArr.map(normalizeNoiseItem))};`
+  // 按 link/name 去重：同一公告被多个关键词命中会重复收集，避免噪音面板堆积重复项
+  const noiseItems = (Array.isArray(noiseArr) ? noiseArr : []).map(normalizeNoiseItem);
+  const seenNoise = new Set();
+  const dedupNoise = noiseItems.filter((n) => {
+    const k = n.link || n.name || '';
+    if (!k || seenNoise.has(k)) return false;
+    seenNoise.add(k);
+    return true;
+  });
+  const noiseDecl = dedupNoise.length
+    ? `        window.noiseTenders = ${JSON.stringify(dedupNoise)};`
     : `        window.noiseTenders = [];`;
   const newLines = [...before, ...out, noiseDecl, ...after];
   let newHtml = joinLines(newLines, eol);
