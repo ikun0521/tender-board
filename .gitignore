@@ -20,3 +20,5 @@ index_backup.html
 scripts/*-candidates.json
 scripts/search-results*.json
 .workbuddy/
+
+scripts/cebpubservice-unfiltered.json

@@ -163,6 +163,7 @@ async function main() {
   console.error(`[开始] 关键词 ${keywords.length} 个，每词 ${PAGES} 页，时间窗 ${DAYS} 天，参考日 ${refDate}`);
 
   const collected = [];
+  const noiseCollected = [];
   const seenUuid = new Set();
   for (const kw of keywords) {
     let kwCount = 0;
@@ -178,7 +179,16 @@ async function main() {
       if (!rows.length) break; // 该词已到末页
       for (const r of rows) {
         if (seenUuid.has(r.uuid)) continue;
-        if (!isRailRelevant(r.industry, r.title)) continue; // 行业/标题滤除非轨交
+        if (!isRailRelevant(r.industry, r.title)) {
+          // 收集被「噪音筛选」拦掉的条目，供前端「显示未筛选噪音」开关按需展示
+          if (isRecent(r.publish, refDate)) {
+            noiseCollected.push({
+              ...r,
+              url: `${DETAIL}?uuid=${r.uuid}&inpvalue=&dataSource=0&tenderAgency=`,
+            });
+          }
+          continue;
+        }
         seenUuid.add(r.uuid);
         collected.push(r);
         kwCount++;
@@ -226,6 +236,26 @@ async function main() {
   fs.writeFileSync(path.resolve(__dirname, '..', outFile), JSON.stringify(out, null, 2), 'utf8');
   const withDl = out.filter((c) => c.deadline && c.deadline !== '待确认').length;
   console.error(`[完成] 写出 ${out.length} 条 -> ${outFile} (含开标截止 ${withDl})`);
+
+  // 噪音（被 isRailRelevant 拦掉）条目 -> 供前端「显示未筛选噪音」开关按需展示
+  const noiseOut = noiseCollected.map((r) => ({
+    title: r.title,
+    url: r.url,
+    link: r.url,
+    snippet: `来源平台：${r.source || '见公告'}（中国招标投标公共服务平台聚合）`,
+    keyword: '',
+    _src: 'cebpubservice-noise',
+    deadline: r.openTime || '待确认',
+    unit: '',
+    publish: r.publish,
+    sourcePlatform: r.source,
+    industry: r.industry,
+    area: r.area,
+    platform: r.source || PLATFORM,
+    railRelevant: false,
+  }));
+  fs.writeFileSync(path.resolve(__dirname, '..', 'scripts/noise-candidates.json'), JSON.stringify(noiseOut, null, 2), 'utf8');
+  console.error(`[噪音] 写出 ${noiseOut.length} 条被拦条目 -> scripts/noise-candidates.json`);
 }
 
 if (require.main === module) {

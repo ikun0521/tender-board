@@ -174,7 +174,23 @@ function formatTender(t, objIndent = 12, fieldIndent = 24) {
   return out.join('\n');
 }
 
-function buildUpdatedArray(html, keptBlocks, newTenders) {
+function normalizeNoiseItem(x, idx) {
+  return {
+    id: `noise-${idx}`,
+    name: x.title || '',
+    unit: x.unit || '',
+    publish: (x.publish || '').slice(0, 10),
+    deadline: x.deadline || '待确认',
+    link: x.url || x.link || '',
+    platform: x.platform || x.sourcePlatform || '中国招标投标公共服务平台',
+    keyword: x.keyword || '',
+    category: '其他',
+    snippet: x.snippet || '',
+    _src: 'cebpubservice-noise',
+  };
+}
+
+function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr) {
   const { lines, arrayStartLine, arrayEndLine } = parseTenderBlocks(html);
   const eol = detectEOL(html);
   const out = [];
@@ -214,8 +230,15 @@ function buildUpdatedArray(html, keptBlocks, newTenders) {
   out.push(lines[arrayEndLine]);
 
   const before = lines.slice(0, arrayStartLine);
-  const after = lines.slice(arrayEndLine + 1);
-  const newLines = [...before, ...out, ...after];
+  // 移除旧的 noiseTenders 声明，避免重复注入
+  const after = lines.slice(arrayEndLine + 1).filter(
+    (l) => !/^\s*window\.noiseTenders\s*=/.test(l) && !/^\s*let noiseTenders\s*=/.test(l)
+  );
+  // 注入被爬虫筛选拦掉的噪音条目（供前端「显示未筛选噪音」开关按需展示）
+  const noiseDecl = Array.isArray(noiseArr) && noiseArr.length
+    ? `        window.noiseTenders = ${JSON.stringify(noiseArr.map(normalizeNoiseItem))};`
+    : `        window.noiseTenders = [];`;
+  const newLines = [...before, ...out, noiseDecl, ...after];
   let newHtml = joinLines(newLines, eol);
   return newHtml;
 }
@@ -229,7 +252,13 @@ function saveTenders(html, tendersToKeep, newTenders) {
     return keep;
   });
 
-  let newHtml = buildUpdatedArray(html, keptBlocks, newTenders);
+  // 读取噪音条目（被爬虫筛选拦掉），供前端开关展示
+  let noiseArr = [];
+  try {
+    const np = path.join(ROOT, 'scripts', 'noise-candidates.json');
+    if (fs.existsSync(np)) noiseArr = JSON.parse(fs.readFileSync(np, 'utf8'));
+  } catch (e) { /* ignore */ }
+  let newHtml = buildUpdatedArray(html, keptBlocks, newTenders, noiseArr);
 
   // 更新统计信息
   const total = tendersToKeep.length + newTenders.length;
