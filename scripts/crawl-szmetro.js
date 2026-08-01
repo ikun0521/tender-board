@@ -165,12 +165,13 @@ async function fetchDetail(link, tries = 3) {
         const submit = pairs['递交文件截止时间'] || '';
         const fileGet = pairs['文件获取截止时间'] || '';
         const open = pairs['开标时间'] || '';
-        const deadlineRaw = submit || fileGet || open || '';
+        // 【2026-08-01】用户需求：截止=报名/获取文件截止 → 文件获取截止优先于递交截止
+        const deadlineRaw = fileGet || submit || open || '';
         return {
           unit: pairs['采购单位名称'],
           publish: normalizeDate(pairs['公告开始时间'] || pairs['发布时间'] || ''),
           deadline: normalizeDate(deadlineRaw),
-          dlSource: submit ? '递交截止' : fileGet ? '文件获取截止' : open ? '开标' : '',
+          dlSource: fileGet ? '文件获取截止' : submit ? '递交截止' : open ? '开标' : '',
         };
       }
       // 情况B：采购计划预告（采购标段名称 + 计划发标时间，无采购单位/无精确截止）

@@ -181,6 +181,7 @@ function normalizeNoiseItem(x, idx) {
     unit: x.unit || '',
     publish: (x.publish || '').slice(0, 10),
     deadline: x.deadline || '待确认',
+    deadlineSource: x.deadlineSource || '',
     link: x.url || x.link || '',
     platform: '国家法定聚合平台',
     sourcePlatform: x.platform || x.sourcePlatform || '中国招标投标公共服务平台',
@@ -191,7 +192,30 @@ function normalizeNoiseItem(x, idx) {
   };
 }
 
-function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr) {
+// 对存量条目块应用元数据 patch（改字段值或补插缺失字段行），保持 id/状态不变
+function applyMetaPatch(lines, block, patch) {
+  const out = [];
+  for (let i = block.start; i <= block.end; i++) {
+    let line = lines[i];
+    for (const [f, v] of Object.entries(patch)) {
+      const re = new RegExp(`("${f}"\\s*:\\s*")[^"]*(",)`);
+      if (re.test(line)) line = line.replace(re, `$1${String(v)}$2`);
+    }
+    out.push(line);
+  }
+  const missing = Object.keys(patch).filter((f) => !out.some((l) => new RegExp(`"${f}"\\s*:`).test(l)));
+  if (missing.length) {
+    const at = out.findIndex((l) => /"deadline"\s*:/.test(l));
+    if (at >= 0) {
+      missing.forEach((f, i) => {
+        out.splice(at + 1 + i, 0, `        "${f}": ${JSON.stringify(patch[f])},`);
+      });
+    }
+  }
+  return out;
+}
+
+function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr, metaPatches) {
   const { lines, arrayStartLine, arrayEndLine } = parseTenderBlocks(html);
   const eol = detectEOL(html);
   const out = [];
@@ -202,7 +226,12 @@ function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr) {
   // 保留的历史对象
   const keptLines = [];
   for (const b of keptBlocks) {
-    for (let i = b.start; i <= b.end; i++) keptLines.push(lines[i]);
+    const patch = metaPatches && metaPatches.find((p) => String(p.id) === String(b.id));
+    if (patch) {
+      keptLines.push(...applyMetaPatch(lines, b, patch));
+    } else {
+      for (let i = b.start; i <= b.end; i++) keptLines.push(lines[i]);
+    }
   }
   if (keptLines.length) {
     out.push(...keptLines);
@@ -244,7 +273,7 @@ function buildUpdatedArray(html, keptBlocks, newTenders, noiseArr) {
   return newHtml;
 }
 
-function saveTenders(html, tendersToKeep, newTenders) {
+function saveTenders(html, tendersToKeep, newTenders, metaPatches) {
   const { blocks } = parseTenderBlocks(html);
   const archiveIds = new Set();
   const keptBlocks = blocks.filter((b) => {
@@ -259,7 +288,7 @@ function saveTenders(html, tendersToKeep, newTenders) {
     const np = path.join(ROOT, 'scripts', 'noise-candidates.json');
     if (fs.existsSync(np)) noiseArr = JSON.parse(fs.readFileSync(np, 'utf8'));
   } catch (e) { /* ignore */ }
-  let newHtml = buildUpdatedArray(html, keptBlocks, newTenders, noiseArr);
+  let newHtml = buildUpdatedArray(html, keptBlocks, newTenders, noiseArr, metaPatches);
 
   // 更新统计信息
   const total = tendersToKeep.length + newTenders.length;
@@ -601,7 +630,7 @@ function buildInfoFromStructured(c) {
   const srcPlat = c.platform || detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url) || '';
   const platform = isCeb ? '国家法定聚合平台' : srcPlat;
   const category = c.keyword || c.category || '未分类';
-  return { name, unit, category, publish, deadline, link: c.url, platform, sourcePlatform: srcPlat, _src: c._src };
+  return { name, unit, category, publish, deadline, link: c.url, platform, sourcePlatform: srcPlat, _src: c._src, deadlineSource: c.deadlineSource || '' };
 }
 
 function isFirstHand(url) {
@@ -816,6 +845,8 @@ async function main() {
   log(`候选结果: ${candidates.length} 条`);
 
   const newTenders = [];
+  let metaUpdated = false;
+  const metaPatches = [];
   for (const c of candidates) {
     if (!c.url) continue;
     let info;
@@ -839,7 +870,22 @@ async function main() {
     if (isNaN(dlDate.getTime()) || dlDate < today0) continue;
 
     const key = `${normalizeName(info.name)}|${info.publish}`;
-    if (dedupKeySet.has(key)) continue;
+    if (dedupKeySet.has(key)) {
+      // 存量条目元数据补全：候选为权威爬虫且带 deadlineSource/sourcePlatform/platform 时，
+      // 记录 patch（按 id），写回时直接改 html 行（保留 id/状态/优先级，不重复入板）
+      const patch = {};
+      if (info.deadlineSource) patch.deadlineSource = info.deadlineSource;
+      if (info.sourcePlatform) patch.sourcePlatform = info.sourcePlatform;
+      if (info.platform) patch.platform = info.platform;
+      if (Object.keys(patch).length) {
+        const idx = existingTenders.findIndex((t) => `${normalizeName(t.name)}|${t.publish}` === key);
+        if (idx >= 0) {
+          metaPatches.push({ id: existingTenders[idx].id, ...patch });
+          metaUpdated = true;
+        }
+      }
+      continue;
+    }
     dedupKeySet.add(key);
 
     info.priority = assignPriority(info, c.keyword);
@@ -874,7 +920,7 @@ async function main() {
     (t) => !archiveIds.includes(t.id) && !oldPublishIds.includes(t.id)
   );
 
-  if (!newTenders.length && !archiveIds.length && !oldPublishIds.length) {
+  if (!newTenders.length && !archiveIds.length && !oldPublishIds.length && !metaUpdated) {
     log('无新增/归档，跳过文件更新与 Git 提交');
     log(`当前看板总数: ${existingTenders.length}`);
     return;
@@ -885,7 +931,7 @@ async function main() {
     log('--dry-run 模式：不写入文件，不提交 Git');
     log(`预计看板总数: ${keptTenders.length + newTenders.length}`);
   } else {
-    const { total } = saveTenders(html, keptTenders, newTenders);
+    const { total } = saveTenders(html, keptTenders, newTenders, metaPatches);
     log(`当前看板总数: ${total}`);
     try {
       commitAndPush(newTenders.length, dateStr);
@@ -913,6 +959,7 @@ module.exports = {
   loadTendersFromHtml,
   parseTenderBlocks,
   saveTenders,
+  applyMetaPatch,
   formatTender,
   extractFromPage,
   extractUnit,

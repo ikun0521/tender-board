@@ -12,7 +12,10 @@
  *       发布时间（<td name="imgShow" id="YYYY-MM-DD HH:mm:ss">）
  *       行业（<span title="铁路">铁路</span>，用于滤除汽车/钢铁等非轨交噪音）
  *       地区、来源平台（包钢/必联/中招联合/各省招投标监管网… → "覆盖全平台"价值所在）
- *       开标时间（<td name="openTime" id="YYYY-MM-DD HH:mm:ss">）→ 即投标截止，用作 deadline
+ *       开标时间（<td name="openTime" id="YYYY-MM-DD HH:mm:ss">）
+ *       【注意】列表仅提供开标时间，无"报名/获取文件截止"字段；详情页与公告 PDF（ctbpsp.com）
+ *       均需登录（403 未登录）。故 deadline 如实取开标时间并标注 deadlineSource='开标时间'，
+ *       由看板显示"开标 08-11"前缀，避免伪装成报名截止。
  *   - vaptcha 在源码中已被注释禁用，基础搜索无需验证码。
  *   - 详情在 ctbpsp.com（Vue SPA，API 隐藏），故本爬虫只取列表字段；采购人(unit)列表无，留空由看板标"见公告"。
  *
@@ -224,6 +227,7 @@ async function main() {
       keyword: '',
       _src: 'cebpubservice',
       deadline,
+      deadlineSource: '开标时间', // 列表仅提供开标时间（详情/PDF 需登录），如实标注，不伪装成报名截止
       unit: '',
       publish: r.publish,
       sourcePlatform: r.source,
@@ -246,6 +250,7 @@ async function main() {
     keyword: '',
     _src: 'cebpubservice-noise',
     deadline: r.openTime || '待确认',
+    deadlineSource: '开标时间',
     unit: '',
     publish: r.publish,
     sourcePlatform: r.source,

@@ -152,6 +152,8 @@ for (const c of readJson('scripts/cebpubservice-candidates.json')) {
     _src: 'cebpubservice',
     // 结构化字段：同步时直接采用，作为权威来源（权重最高）
     deadline,
+    deadlineSource: c.deadlineSource || '',
+    sourcePlatform: srcPlat,
     unit,
     publish,
     platform: c.platform || srcPlat || '中国招标投标公共服务平台',
