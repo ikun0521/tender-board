@@ -182,7 +182,8 @@ function normalizeNoiseItem(x, idx) {
     publish: (x.publish || '').slice(0, 10),
     deadline: x.deadline || '待确认',
     link: x.url || x.link || '',
-    platform: x.platform || x.sourcePlatform || '中国招标投标公共服务平台',
+    platform: '国家法定聚合平台',
+    sourcePlatform: x.platform || x.sourcePlatform || '中国招标投标公共服务平台',
     keyword: x.keyword || '',
     category: '其他',
     snippet: x.snippet || '',
@@ -596,9 +597,11 @@ function buildInfoFromStructured(c) {
   if (!deadline || deadline === '待确认' || deadline === 'null') deadline = '待确认';
   const publish = (c.publish || '').trim() || new Date().toISOString().split('T')[0];
   const unit = (c.unit || '').trim();
-  const platform = c.platform || detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url);
+  const isCeb = String(c._src || '').indexOf('cebpubservice') === 0;
+  const srcPlat = c.platform || detectPlatformByText(name, (c.snippet || '') + ' ' + name, c.url) || detectPlatform(c.url) || '';
+  const platform = isCeb ? '国家法定聚合平台' : srcPlat;
   const category = c.keyword || c.category || '未分类';
-  return { name, unit, category, publish, deadline, link: c.url, platform };
+  return { name, unit, category, publish, deadline, link: c.url, platform, sourcePlatform: srcPlat, _src: c._src };
 }
 
 function isFirstHand(url) {

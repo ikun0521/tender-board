@@ -178,7 +178,7 @@
                 <div class="flex-1">
                     <div class="relative">
                         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        <input type="text" id="searchInput" placeholder="搜索项目名称、招标单位、产品类别或一手平台..." class="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all">
+                        <input type="text" id="searchInput" placeholder="搜索项目名称、招标单位、产品类别或来源平台..." class="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all">
                     </div>
                 </div>
                 <div class="flex gap-2 flex-wrap items-center">
@@ -201,7 +201,7 @@
                     </label>
                 </div>
             </div>
-            <!-- 一手平台筛选：按看板中实际出现的平台动态生成 -->
+            <!-- 来源平台筛选：按看板中实际出现的平台动态生成 -->
             <div id="platformFilterBar" class="flex flex-wrap gap-2 items-center mt-3 pt-3 border-t border-slate-100"></div>
         </div>
 
@@ -217,7 +217,7 @@
                             <th class="col-category px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">产品类别</th>
                             <th class="col-publish px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">发布时间</th>
                             <th class="col-deadline px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
-                            <th class="col-platform px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                            <th class="col-platform px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">来源平台</th>
                             <th class="col-link px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">公告链接</th>
                             <th class="w-[130px] min-w-[130px] px-4 py-4 text-left text-sm font-semibold text-slate-500 uppercase tracking-wider">状态操作</th>
                         </tr>
@@ -259,7 +259,7 @@
                                     <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
                                     <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
                                     <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
-                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">来源平台</th>
                                     <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
                                     <th class="w-[112px] min-w-[112px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
                                 </tr>
@@ -294,7 +294,7 @@
                                     <th class="col-name px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">项目名称</th>
                                     <th class="col-unit px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">招标单位</th>
                                     <th class="col-deadline px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">截止日期</th>
-                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">一手平台</th>
+                                    <th class="col-platform px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">来源平台</th>
                                     <th class="w-[90px] min-w-[90px] px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">公告</th>
                                 </tr>
                             </thead>
@@ -584,7 +584,7 @@
                     </select>
                 </div>
                 <div class="bg-slate-50 rounded-lg px-4 py-3 text-sm text-slate-500">
-                    <p>一手平台将自动设为「人工」，无公告链接。</p>
+                    <p>来源平台将自动设为「人工」，无公告链接。</p>
                 </div>
             </div>
             <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
@@ -18206,12 +18206,27 @@
         }
 
         /** 平台筛选按钮：按看板中实际出现的平台动态生成（人工导入项归入"人工"） */
+        // 来源平台归一：cebpubservice 聚合源的几十个镜像平台统一显示为「国家法定聚合平台」
+        function isAggregatedSource(t) {
+            if (t && t._src && String(t._src).indexOf('cebpubservice') === 0) return true;
+            const link = (t && t.link) || '';
+            return link.indexOf('ctbpsp.com') !== -1 || link.indexOf('cebpubservice.com') !== -1;
+        }
+        function displayPlatform(t) {
+            if (isAggregatedSource(t)) return '国家法定聚合平台';
+            return (t && t.platform || '').trim();
+        }
+        function originalPlatform(t) {
+            if (!isAggregatedSource(t)) return '';
+            return (t && t.sourcePlatform) || (t && t.platform) || '';
+        }
+
         function renderPlatformFilters() {
             const bar = document.getElementById('platformFilterBar');
             if (!bar) return;
             const platforms = ['all'];
             for (const t of tenders) {
-                const p = (t.platform || '').trim();
+                const p = displayPlatform(t);
                 if (p && !platforms.includes(p)) platforms.push(p);
             }
             bar.innerHTML = platforms.map(p => {
@@ -18278,12 +18293,12 @@
 
             const filtered = source.filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
-                const matchesPlatform = currentPlatformFilter === 'all' || t.platform === currentPlatformFilter;
+                const matchesPlatform = currentPlatformFilter === 'all' || displayPlatform(t) === currentPlatformFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    t.platform.toLowerCase().includes(searchTerm.toLowerCase());
+                    displayPlatform(t).toLowerCase().includes(searchTerm.toLowerCase());
                 const state = getReviewState(t.id);
                 const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
                 return matchesPriority && matchesPlatform && matchesSearch && matchesState;
@@ -18327,13 +18342,17 @@
                         <td class="col-publish px-4 py-4 whitespace-nowrap table-text text-slate-600">${t.publish}</td>
                         <td class="col-deadline px-4 py-4 whitespace-nowrap table-text text-slate-600">${t.deadline}</td>
                         <td class="col-platform px-4 py-4 whitespace-nowrap">
-                            ${t.platform === '人工' 
-                                ? `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-amber-50 text-amber-700 border border-amber-200">${t.platform}</span>`
-                                : `<a href="${platformUrl[t.platform] || '#'}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 transition-colors">
-                                    ${t.platform}
-                                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                                </a>`
-                            }
+                            ${(() => {
+                                const dp = displayPlatform(t);
+                                const orig = originalPlatform(t);
+                                if (dp === '人工') {
+                                    return `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-amber-50 text-amber-700 border border-amber-200">${dp}</span>`;
+                                }
+                                if (orig) {
+                                    return `<a href="${t.link || '#'}" target="_blank" rel="noopener noreferrer" title="原始来源平台：${escapeHtml(orig)}" class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 transition-colors">${dp}<svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`;
+                                }
+                                return `<a href="${platformUrl[dp] || '#'}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 transition-colors">${dp}<svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>`;
+                            })()}
                         </td>
                         <td class="col-link px-4 py-4 whitespace-nowrap">
                             <div>${t.link 
@@ -18397,7 +18416,7 @@
                     </td>
                     <td class="col-unit px-4 py-3"><div class="table-text text-slate-600">${t.unit}</div></td>
                     <td class="col-deadline px-4 py-3 whitespace-nowrap table-text text-slate-600">${t.deadline}</td>
-                    <td class="col-platform px-4 py-3 whitespace-nowrap">${t.platform ? `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${t.platform}</span>` : '<span class="text-xs text-slate-300">—</span>'}</td>
+                    <td class="col-platform px-4 py-3 whitespace-nowrap">${displayPlatform(t) ? `<span class="table-text inline-flex items-center px-2.5 py-0.5 rounded-md font-medium bg-indigo-50 text-indigo-700 border border-indigo-200" title="原始来源平台：${escapeHtml(originalPlatform(t))}">${displayPlatform(t)}</span>` : '<span class="text-xs text-slate-300">—</span>'}</td>
                     <td class="w-[90px] min-w-[90px] px-4 py-3 whitespace-nowrap"><div>${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="table-text inline-flex items-center font-medium text-blue-600 hover:text-blue-800 transition-colors">查看公告<svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>` : '<span class="text-xs text-slate-300">—</span>'}</div><span class="block mt-1 text-[10px] text-slate-400">仅预览·未入看板</span></td>
                 `;
                 tbody.appendChild(tr);
@@ -18424,7 +18443,7 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const list = extraTenders().filter(t => currentPlatformFilter === 'all' || t.platform === currentPlatformFilter).slice().sort((a, b) => {
+            const list = extraTenders().filter(t => currentPlatformFilter === 'all' || displayPlatform(t) === currentPlatformFilter).slice().sort((a, b) => {
                 const sa = scoreTender(a, filterConfig).score;
                 const sb = scoreTender(b, filterConfig).score;
                 if (sa !== sb) return sb - sa;
@@ -18456,7 +18475,7 @@
                     <td class="col-unit px-4 py-3 text-sm text-slate-600">${t.unit || '—'}</td>
                     <td class="col-deadline px-4 py-3 whitespace-nowrap text-sm text-slate-600">${t.deadline}</td>
                     <td class="col-platform px-4 py-3 whitespace-nowrap">
-                        <span class="text-xs inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600 border border-slate-200">${t.platform}</span>
+                        <span class="text-xs inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-600 border border-slate-200">${displayPlatform(t)}</span>
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         ${t.link ? `<a href="${t.link}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-600 hover:text-blue-800">查看 ↗</a>` : '<span class="text-xs text-slate-300">—</span>'}
@@ -18543,22 +18562,22 @@
         function exportTable() {
             const filtered = primaryTenders().filter(t => {
                 const matchesPriority = currentFilter === 'all' || t.priority === currentFilter;
-                const matchesPlatform = currentPlatformFilter === 'all' || t.platform === currentPlatformFilter;
+                const matchesPlatform = currentPlatformFilter === 'all' || displayPlatform(t) === currentPlatformFilter;
                 const matchesSearch = searchTerm === '' || 
                     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    t.platform.toLowerCase().includes(searchTerm.toLowerCase());
+                    displayPlatform(t).toLowerCase().includes(searchTerm.toLowerCase());
                 const state = getReviewState(t.id);
                 const matchesState = currentStateFilter === 'all' || state === currentStateFilter;
                 return matchesPriority && matchesPlatform && matchesSearch && matchesState;
             });
 
-            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,截止日期,一手平台,审阅状态,公告链接\n';
+            let csv = '\uFEFF分级,相关度,优先级,项目名称,招标单位,产品类别,发布时间,截止日期,来源平台,审阅状态,公告链接\n';
             const push = (t, tier) => {
                 const state = getReviewState(t.id);
                 const s = scoreTender(t, filterConfig);
-                csv += `${tier},${s.excluded ? 0 : s.score},${t.priority},"${t.name}","${t.unit}","${t.category}",${t.publish},"${t.deadline}","${t.platform}","${state}","${t.link}"\n`;
+                csv += `${tier},${s.excluded ? 0 : s.score},${t.priority},"${t.name}","${t.unit}","${t.category}",${t.publish},"${t.deadline}","${displayPlatform(t)}","${state}","${t.link}"\n`;
             };
             filtered.forEach(t => push(t, '一级'));
             extraTenders().forEach(t => push(t, '多余'));
