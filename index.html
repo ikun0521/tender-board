@@ -19604,7 +19604,16 @@
             return scoreTender(t, filterConfig).score > 0;
         }
 
-        function primaryTenders() { return tenders.filter(t => isVisibleTender(t) && getTier(t, filterConfig) === 'primary'); }
+        function primaryTenders() {
+            return tenders
+                .filter(t => isVisibleTender(t) && getTier(t, filterConfig) === 'primary')
+                .sort((a, b) => {
+                    const sa = scoreTender(a, filterConfig).score;
+                    const sb = scoreTender(b, filterConfig).score;
+                    if (sb !== sa) return sb - sa;
+                    return new Date(b.publish) - new Date(a.publish);
+                });
+        }
         function extraTenders() { return tenders.filter(t => isVisibleTender(t) && getTier(t, filterConfig) === 'extra'); }
 
         function scoreColor(score) {
