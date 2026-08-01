@@ -685,6 +685,7 @@ async function archiveExpiredTenders(tenders) {
 
   // 清理超过 7 天未操作的归档
   try {
+    const now = Date.now();
     const archived = await (await fetch(`${API_BASE}/api/archive`, { signal: AbortSignal.timeout(8000) })).json();
     if (Array.isArray(archived)) {
       for (const a of archived) {
