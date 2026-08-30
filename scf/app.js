@@ -16,6 +16,7 @@ const KEYWORDS_KEY = 'data/keywords.json';
 const TENDERS_KEY = 'data/tenders.json';
 const ARCHIVED_TENDERS_KEY = 'data/archived-tenders.json';
 const FILTER_CONFIG_KEY = 'data/filter-config.json';
+const CRRCGO_CANDIDATES_KEY = 'crawl/crrcgo-candidates.json';
 
 // 内存级归档缓存（与前端自动归档匹配；启动时从 COS 加载）
 let archivedTenders = [];
@@ -110,6 +111,39 @@ const server = http.createServer(async (req, res) => {
       await putObject(KEYWORDS_KEY, JSON.stringify(payload));
       res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
       res.end(JSON.stringify(payload));
+      return;
+    }
+
+    // GET /api/crrcgo-candidates — 返回 SCF 爬虫写入的中车购候选（缺失返回空数组）
+    if (path === '/api/crrcgo-candidates' && method === 'GET') {
+      const data = await getObject(CRRCGO_CANDIDATES_KEY);
+      res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(data || '[]');
+      return;
+    }
+
+    // POST /api/crrcgo-candidates — SCF 爬虫上报候选（需 x-crawl-token，整体覆盖写）
+    if (path === '/api/crrcgo-candidates' && method === 'POST') {
+      if (!process.env.CRAWL_TOKEN || req.headers['x-crawl-token'] !== process.env.CRAWL_TOKEN) {
+        res.writeHead(401, { ...corsHeaders, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'token 校验失败' }));
+        return;
+      }
+      const body = await readBody(req);
+      if (body.length > 5 * 1024 * 1024) {
+        res.writeHead(413, { ...corsHeaders, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'payload 超过 5MB 上限' }));
+        return;
+      }
+      const payload = JSON.parse(body || '[]');
+      if (!Array.isArray(payload)) {
+        res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '候选必须是数组' }));
+        return;
+      }
+      await putObject(CRRCGO_CANDIDATES_KEY, JSON.stringify(payload));
+      res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, count: payload.length }));
       return;
     }
 

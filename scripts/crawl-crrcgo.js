@@ -314,7 +314,12 @@ async function main() {
   if (out.length > 30) console.log(`... 其余 ${out.length - 30} 条见 JSON 文件`);
 }
 
-main().catch((e) => {
-  console.error('运行失败:', e);
-  process.exit(1);
-});
+module.exports = { main };
+
+// 仅作为主程序运行时自动执行（SCF 版 require 本文件后手动调 main）
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('运行失败:', e);
+    process.exit(1);
+  });
+}

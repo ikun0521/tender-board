@@ -22,7 +22,27 @@ function norm(s) {
   return String(s == null ? '' : s).replace(/\s+/g, '').replace(/[（）()]/g, '').trim();
 }
 
-const out = [];
+// ---- 云端 crrcgo 候选预取（2026-08-30 起中车购爬虫部署在 SCF，每天 02:00 爬取写 COS，
+//      这里从函数 URL 拉回本地缓存；失败时用本地缓存兜底，不阻塞合并）----
+async function prefetchRemoteCrrcgo() {
+  const api = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/crrcgo-candidates';
+  const localPath = path.resolve(ROOT, 'scripts/crrcgo-candidates.json');
+  try {
+    const res = await fetch(api, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const arr = await res.json();
+    if (!Array.isArray(arr)) throw new Error('返回不是数组');
+    fs.writeFileSync(localPath, JSON.stringify(arr, null, 2), 'utf-8');
+    console.log(`[crrcgo] 云端候选 ${arr.length} 条已更新到本地缓存`);
+  } catch (e) {
+    console.log(`[crrcgo] 云端拉取失败，使用本地缓存兜底: ${e.message}`);
+  }
+}
+
+async function run() {
+  await prefetchRemoteCrrcgo();
+
+  const out = [];
 
 // ---- 国铁 95306 ----
 for (const c of readJson('scripts/95306-candidates.json')) {
@@ -55,7 +75,7 @@ for (const c of readJson('scripts/95306-candidates.json')) {
   });
 }
 
-// ---- 中车购 crrcgo ----
+// ---- 中车购 crrcgo（2026-08-30 起候选来自 SCF 云端爬虫，见上方 prefetchRemoteCrrcgo）----
 for (const c of readJson('scripts/crrcgo-candidates.json')) {
   const unit = (c.unit || '').trim();
   const publish = (c.publish || '').trim();
@@ -222,3 +242,9 @@ fs.writeFileSync(
 
 console.log(`[合并] 候选合计 ${merged.length} 条`, bySrc);
 console.log(`[合并] 已写入 scripts/search-results.json`);
+}
+
+run().catch((e) => {
+  console.error('合并失败:', e);
+  process.exit(1);
+});
