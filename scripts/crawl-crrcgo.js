@@ -23,7 +23,7 @@
  *   --all-types 保留所有公告类型（默认只保留可投标的「采购/招标公告」，
  *               剔除中标候选人公示、成交结果公示、直接采购公示等结果类公示）
  *   --out       输出候选 JSON 路径（默认 scripts/crrcgo-candidates.json）
- *   --concurrency 详情抓取并发数（默认 4）
+ *   --concurrency 详情抓取并发数（默认 2）
  */
 
 const crypto = require('crypto');
@@ -58,9 +58,14 @@ function request(method, pathBase, body) {
     const fullPath = `${pathBase}${sep}ep=${ep}&p=${ts}`;
     const payload = body ? JSON.stringify(body) : null;
     const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      // 2026-08-30 触发中车购 WAF 限流（TLS 层被掐断），请求头补全为完整浏览器特征
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+      'Accept-Language': 'zh-CN,zh;q=0.9',
       Origin: 'https://www.crrcgo.cc',
       Referer: 'https://www.crrcgo.cc/',
+      Connection: 'keep-alive',
     };
     if (payload) {
       headers['Content-Type'] = 'application/json';
@@ -134,6 +139,11 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
+/** 随机延迟 [minMs, maxMs]：模拟人类节奏，避免固定间隔被风控识别（2026-08-30 加） */
+function sleepMs(minMs, maxMs) {
+  return new Promise((r) => setTimeout(r, minMs + Math.floor(Math.random() * (maxMs - minMs + 1))));
+}
+
 /** 读取关键词：优先 COS API，失败回退本地文件 */
 async function loadKeywords() {
   const api = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords';
@@ -190,7 +200,7 @@ async function main() {
   const pageSize = parseInt(getArg('--page-size', '20'), 10);
   const withDetail = hasFlag('--detail');
   const noFilter = hasFlag('--no-filter');
-  const concurrency = parseInt(getArg('--concurrency', '4'), 10);
+  const concurrency = parseInt(getArg('--concurrency', '2'), 10);
   const outPath = path.resolve(ROOT, getArg('--out', 'scripts/crrcgo-candidates.json'));
 
   let keywords;
@@ -231,7 +241,7 @@ async function main() {
     } catch (e) {
       console.log(`  ✗ ${kw}: ${e.message}`);
     }
-    await new Promise((r) => setTimeout(r, 120)); // 轻微限速
+    await sleepMs(2000, 3000); // 限速：每关键词 2~3 秒随机间隔（原 120ms，2026-08-30 触发 WAF 限流后加严）
   }
 
   let candidates = [...byId.values()];
@@ -260,7 +270,7 @@ async function main() {
         }
         c.deadline = c.overTime || '待确认';
         c.deadlineSource = 'overTime';
-        await new Promise((r) => setTimeout(r, 80));
+        await sleepMs(800, 1500); // 限速：每条详情 0.8~1.5 秒随机间隔（原 80ms，2026-08-30 加严）
       }
     }
     await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, worker));
