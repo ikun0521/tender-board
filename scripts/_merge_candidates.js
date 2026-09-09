@@ -25,7 +25,7 @@ function norm(s) {
 // ---- 云端 crrcgo 候选预取（2026-08-30 起中车购爬虫部署在 SCF，每天 02:00 爬取写 COS，
 //      这里从函数 URL 拉回本地缓存；失败时用本地缓存兜底，不阻塞合并）----
 async function prefetchRemoteCrrcgo() {
-  const api = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/crrcgo-candidates';
+  const api = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/crrcgo-candidates';
   const localPath = path.resolve(ROOT, 'scripts/crrcgo-candidates.json');
   try {
     const res = await fetch(api, { signal: AbortSignal.timeout(20000) });

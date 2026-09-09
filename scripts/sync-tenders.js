@@ -22,7 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const HTML_PATH = path.join(ROOT, 'index.html');
 const BACKUP_PATH = path.join(ROOT, 'index_backup.html');
 const KEYWORDS_FILE = path.join(ROOT, '产品关键词.txt');
-const API_BASE = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com';
+const API_BASE = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com';
 
 const EXCLUDED_TERMS = ['驾校', '汽车驾驶', '客车租赁', '租车', '驾驶培训'];
 const FIRST_HAND_DOMAINS = [

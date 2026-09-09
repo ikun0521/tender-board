@@ -290,7 +290,7 @@ async function loadKeywords() {
     const txt = await new Promise((resolve, reject) => {
       https
         .get(
-          'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords',
+          'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords',
           { timeout: 15000 },
           (res) => {
             let d = '';

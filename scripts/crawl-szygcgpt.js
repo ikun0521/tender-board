@@ -81,7 +81,7 @@ async function loadKeywords() {
   if (cli) return cli.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean);
   try {
     const txt = await new Promise((resolve, reject) => {
-      https.get('https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords', { timeout: 15000 }, (res) => {
+      https.get('https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords', { timeout: 15000 }, (res) => {
         let d = ''; res.setEncoding('utf8'); res.on('data', (c) => (d += c)); res.on('end', () => resolve(d));
       }).on('error', reject).on('timeout', function () { this.destroy(new Error('timeout')); });
     });

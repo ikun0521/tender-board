@@ -16,7 +16,7 @@
 const https = require('https');
 const fs = require('fs');
 
-const FUNCTION_URL = (process.env.FUNCTION_URL || 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com').replace(/\/$/, '');
+const FUNCTION_URL = (process.env.FUNCTION_URL || 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com').replace(/\/$/, '');
 const TMP_OUT = '/tmp/crrcgo-candidates.json';
 
 function httpJson(method, urlPath, body, headers) {

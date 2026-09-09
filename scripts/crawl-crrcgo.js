@@ -146,7 +146,7 @@ function sleepMs(minMs, maxMs) {
 
 /** 读取关键词：优先 COS API，失败回退本地文件 */
 async function loadKeywords() {
-  const api = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords';
+  const api = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords';
   try {
     const res = await fetch(api, { signal: AbortSignal.timeout(15000) });
     if (res.ok) {

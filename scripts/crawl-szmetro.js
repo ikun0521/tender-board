@@ -43,7 +43,7 @@ const EXCLUDE_TITLE = /(中标候选人公示|中标结果公示|中标公告|�
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function loadKeywords() {
-  const apiUrl = 'https://1457331256-984dniw11b.ap-guangzhou.tencentscf.com/api/keywords';
+  const apiUrl = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords';
   let base = [];
   try {
     const res = await fetch(apiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
