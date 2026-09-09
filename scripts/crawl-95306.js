@@ -58,6 +58,7 @@
  *   --verbose            打印每条抓取明细
  */
 
+const { API_BASE } = require('./cloud-url');
 const crypto = require('crypto');
 const https = require('https');
 const fs = require('fs');
@@ -290,7 +291,7 @@ async function loadKeywords() {
     const txt = await new Promise((resolve, reject) => {
       https
         .get(
-          'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords',
+          `${API_BASE}/api/keywords`,
           { timeout: 15000 },
           (res) => {
             let d = '';

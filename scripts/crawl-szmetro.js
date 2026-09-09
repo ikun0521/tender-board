@@ -13,6 +13,7 @@
  *   --detail  抓取详情页抽取 采购单位名称 + 截止时间（默认仅列表）
  *   --pages N 每栏目爬取页数（默认 12，约覆盖近 1-2 个月）
  */
+const { API_BASE } = require('./cloud-url');
 const fs = require('fs');
 const path = require('path');
 const BASE = 'https://cg.shenzhenmc.com';
@@ -43,7 +44,7 @@ const EXCLUDE_TITLE = /(中标候选人公示|中标结果公示|中标公告|�
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function loadKeywords() {
-  const apiUrl = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords';
+  const apiUrl = `${API_BASE}/api/keywords`;
   let base = [];
   try {
     const res = await fetch(apiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });

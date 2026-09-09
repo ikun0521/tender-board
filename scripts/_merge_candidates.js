@@ -5,6 +5,7 @@
  * 取不到正文 → 退化为用 candidateTitle + snippet 抽取。因此把爬虫已得的
  * 采购人/发布时间/截止时间 编码进 snippet，保证抽取质量不丢失。
  */
+const { API_BASE } = require('./cloud-url');
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
@@ -25,7 +26,7 @@ function norm(s) {
 // ---- 云端 crrcgo 候选预取（2026-08-30 起中车购爬虫部署在 SCF，每天 02:00 爬取写 COS，
 //      这里从函数 URL 拉回本地缓存；失败时用本地缓存兜底，不阻塞合并）----
 async function prefetchRemoteCrrcgo() {
-  const api = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/crrcgo-candidates';
+  const api = `${API_BASE}/api/crrcgo-candidates`;
   const localPath = path.resolve(ROOT, 'scripts/crrcgo-candidates.json');
   try {
     const res = await fetch(api, { signal: AbortSignal.timeout(20000) });

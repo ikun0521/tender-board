@@ -15,6 +15,7 @@
  *   node scripts/crawl-suzhou-metro.js --detail --out xxx.json
  */
 
+const { API_BASE } = require('./cloud-url');
 const fs = require('fs');
 const path = require('path');
 const { parseDeadline } = require('./lib/deadline-parser.js');
@@ -69,7 +70,7 @@ function stripTags(html) {
 
 async function loadKeywords() {
   // 优先 SCF API（与 runbook 一致），失败回退 产品关键词.txt
-  const apiUrl = 'https://1457331256-0xrmb7p9md.ap-guangzhou.tencentscf.com/api/keywords';
+  const apiUrl = `${API_BASE}/api/keywords`;
   let list = [];
   try {
     const res = await fetch(apiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
